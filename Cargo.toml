@@ -1,0 +1,10 @@
+[package]
+name = "health-check"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+indicatif = "0.17.9"
+tokio = { version = "1.42.0", features = ["full"] }
+wasmer = "5.0.3"
+wasmer-wasix = "0.33.0"
