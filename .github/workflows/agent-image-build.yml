@@ -28,7 +28,7 @@ jobs:
         env:
           DOCKER_BUILDKIT_SANDBOX_MODE: "disabled"
         with:
-          context: "{{defaultContext}}:back"
+          context: "{{defaultContext}}"
           platforms: linux/amd64,linux/arm64/v8
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}
