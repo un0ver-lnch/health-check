@@ -49,6 +49,12 @@ fn main() {
 
         let entry_path = entry.path();
 
+        if entry_path.is_dir() == true
+            && entry_path.file_name().unwrap().to_str().unwrap() == "lost+found"
+        {
+            continue;
+        }
+
         if entry_path.is_dir() {
             panic!("Error: MODULES_PATH folder contains a directory");
         }
