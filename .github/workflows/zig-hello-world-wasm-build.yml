@@ -8,6 +8,7 @@ on:
       - trunk
     paths:
       - "zig-hello-wasm/**"
+      - ".github/workflows/zig-hello-world-wasm-build.yml"
 jobs:
   Build-WASM-Module:
     runs-on: ubuntu-latest
