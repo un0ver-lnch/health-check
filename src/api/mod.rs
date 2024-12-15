@@ -29,9 +29,7 @@ async fn get_health(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<HashMap<String, WorkerStates>>>>,
 ) -> (StatusCode, String) {
-    let state = state.lock();
-
-    let state = match state {
+    let state = match state.lock() {
         Ok(val) => val,
         Err(_) => {
             return (
