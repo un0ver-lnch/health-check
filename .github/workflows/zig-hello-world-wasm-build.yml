@@ -22,7 +22,7 @@ jobs:
         with:
           zig-version: 0.13.0 # released versions or master
       - name: Build zig wasm module
-        run: cd zig-hello-wasm && devenv shell zig build-exe main.zig -target wasm32-wasi
+        run: cd zig-hello-wasm && zig build-exe main.zig -target wasm32-wasi
       - name: Publish zig wasm module
         uses: actions/upload-artifact@v4
         with:
