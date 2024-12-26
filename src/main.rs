@@ -2,7 +2,7 @@ mod api;
 
 mod types;
 
-use types::{WasmWorker, WorkerStates};
+use types::{RunnerState, WasmRunner, WasmWorker, WorkerStates};
 
 use std::{
     collections::HashMap,
@@ -43,6 +43,7 @@ fn main() {
     };
 
     let mut wasm_containers: Vec<WasmWorker> = Vec::new();
+    let mut wasm_run_containers: Vec<WasmRunner> = Vec::new();
     bar.set_message("Reading files in MODULES_PATH folder");
     for entry in modules_path_iterator {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
@@ -67,11 +68,19 @@ fn main() {
             "Reading {} file...",
             entry.file_name().to_str().unwrap()
         ));
-        wasm_containers.push(WasmWorker {
-            module_name: entry.file_name().to_str().unwrap().to_string(),
-            bytes: std::fs::read(entry_path)
-                .expect("Error: Could not read file in MODULES_PATH folder"),
-        });
+        if entry.file_name().to_str().unwrap().ends_with("_run.wasm") {
+            wasm_run_containers.push(WasmRunner {
+                module_name: entry.file_name().to_str().unwrap().to_string(),
+                bytes: std::fs::read(entry_path)
+                    .expect("Error: Could not read file in MODULES_PATH folder"),
+            });
+        } else {
+            wasm_containers.push(WasmWorker {
+                module_name: entry.file_name().to_str().unwrap().to_string(),
+                bytes: std::fs::read(entry_path)
+                    .expect("Error: Could not read file in MODULES_PATH folder"),
+            });
+        }
     }
 
     if wasm_containers.is_empty() {
@@ -83,7 +92,6 @@ fn main() {
 
     let worker_states = Arc::new(Mutex::new(HashMap::new()));
 
-    // let wasm_tasks = vec![];
     for entry in wasm_containers {
         let worker_states = worker_states.clone();
         worker_states.lock().unwrap().insert(
@@ -165,6 +173,26 @@ fn main() {
                 std::thread::sleep(std::time::Duration::from_secs(60));
             }
         });
+    }
+
+    let runner_states = Arc::new(Mutex::new(HashMap::new()));
+
+    for runner in wasm_run_containers {
+        let runner_states = runner_states.clone();
+
+        let (channel_trigger, channel_reciver) = std::sync::mpsc::channel();
+
+        runner_states.lock().unwrap().insert(
+            runner.module_name.clone(),
+            RunnerState {
+                module_name: runner.module_name.clone(),
+                last_run: std::time::Instant::now(),
+                last_run_success: false,
+                channel_trigger,
+            },
+        );
+
+        std::thread::spawn(move || while let Ok(_) = channel_reciver.recv() {});
     }
 
     std::thread::spawn(move || {

@@ -18,6 +18,7 @@ pub async fn create_server(worker_states: Arc<Mutex<HashMap<String, WorkerStates
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route("/health/:service_name", get(get_health))
+        .route("/run/:service_name", get(run_service))
         .with_state(worker_states);
 
     // run our app with hyper, listening globally on port 3000
@@ -26,6 +27,42 @@ pub async fn create_server(worker_states: Arc<Mutex<HashMap<String, WorkerStates
 }
 
 async fn get_health(
+    Path(service_name): Path<String>,
+    State(state): State<Arc<Mutex<HashMap<String, WorkerStates>>>>,
+) -> (StatusCode, String) {
+    let state = match state.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
+    };
+
+    // println!("Service name: {}", service_name);
+    // println!("State: {:?}", state);
+
+    if let Some(worker_state) = state.get(&service_name) {
+        if worker_state.on_crash {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Health service is not available".to_string(),
+            );
+        } else if worker_state.alive {
+            return (StatusCode::OK, "OK".to_string());
+        } else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Service is not available".to_string(),
+            );
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, "Service not found".to_string());
+    };
+}
+
+async fn run_service(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<HashMap<String, WorkerStates>>>>,
 ) -> (StatusCode, String) {
