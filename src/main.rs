@@ -192,12 +192,77 @@ fn main() {
             },
         );
 
-        std::thread::spawn(move || while let Ok(_) = channel_reciver.recv() {});
+        std::thread::spawn(move || {
+            // Create a Store.
+            let mut store = Store::default();
+            // Let's compile the Wasm module.
+            let module = match Module::new(&store, &runner.bytes) {
+                Ok(val) => val,
+                Err(_) => {
+                    panic!("Error: Could not compile Wasm module");
+                }
+            };
+
+            // let (stdout_tx, stdout_rx) = Pipe::channel();
+            // let stdout_rx = Box::new(stdout_rx);
+            // let stdout_tx = Box::new(stdout_tx);
+            let module = Box::new(module);
+            while let Ok(_) = channel_reciver.recv() {
+                let (stdout_tx, mut stdout_rx) = Pipe::channel();
+                //let mut stdout_rx = stdout_rx.clone();
+                //let stdout_tx = stdout_tx.clone();
+                let module = module.clone();
+
+                // Run the module.
+                let builder = WasiEnv::builder(&runner.module_name)
+                    // .args(&["world"])
+                    // .env("KEY", "Value")
+                    .stdout(Box::new(stdout_tx))
+                    .run_with_store(*module, &mut store);
+
+                let _ = match builder {
+                    Ok(val) => val,
+                    Err(_) => {
+                        runner_states
+                            .lock()
+                            .unwrap()
+                            .get_mut(&runner.module_name)
+                            .unwrap()
+                            .last_run_success = false;
+                        panic!("Error: Could not run WasiEnv builder");
+                    }
+                };
+
+                // FIXME: Add better implementation of a health check.
+
+                let mut buf = String::new();
+                stdout_rx.read_to_string(&mut buf).unwrap();
+
+                // println!("Read \"{}\" from the WASI stdout!", buf.trim());
+                // println!("{} == {} = {}", buf, "true", buf.trim().eq("true"));
+
+                if buf.eq("true") {
+                    runner_states
+                        .lock()
+                        .unwrap()
+                        .get_mut(&runner.module_name)
+                        .unwrap()
+                        .last_run_success = true;
+                } else {
+                    runner_states
+                        .lock()
+                        .unwrap()
+                        .get_mut(&runner.module_name)
+                        .unwrap()
+                        .last_run_success = false;
+                }
+            }
+        });
     }
 
     std::thread::spawn(move || {
         //let worker_states = worker_states.clone();
-        api::create_server(worker_states);
+        api::create_server(worker_states, runner_states);
     });
 
     std::thread::park();

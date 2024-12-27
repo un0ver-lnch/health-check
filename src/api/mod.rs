@@ -6,20 +6,32 @@ use std::{
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Router,
 };
 
-use crate::types::WorkerStates;
+use crate::types::{RunnerState, WorkerStates};
+
+struct AppState {
+    worker_states: Arc<Mutex<HashMap<String, WorkerStates>>>,
+    runner_states: Arc<Mutex<HashMap<String, RunnerState>>>,
+}
 
 #[tokio::main]
-pub async fn create_server(worker_states: Arc<Mutex<HashMap<String, WorkerStates>>>) {
+pub async fn create_server(
+    worker_states: Arc<Mutex<HashMap<String, WorkerStates>>>,
+    runner_states: Arc<Mutex<HashMap<String, RunnerState>>>,
+) {
+    let app_state = AppState {
+        worker_states,
+        runner_states,
+    };
     // build our application with a single route
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
         .route("/health/:service_name", get(get_health))
-        .route("/run/:service_name", get(run_service))
-        .with_state(worker_states);
+        .route("/thunder/:service_name", post(run_service_thunder))
+        .route("/thunder/stats/:service_name", get(get_service_stats))
+        .with_state(Arc::new(Mutex::new(app_state)));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -28,9 +40,19 @@ pub async fn create_server(worker_states: Arc<Mutex<HashMap<String, WorkerStates
 
 async fn get_health(
     Path(service_name): Path<String>,
-    State(state): State<Arc<Mutex<HashMap<String, WorkerStates>>>>,
+    State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
     let state = match state.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
+    };
+
+    let worker_states = match state.worker_states.lock() {
         Ok(val) => val,
         Err(_) => {
             return (
@@ -43,7 +65,7 @@ async fn get_health(
     // println!("Service name: {}", service_name);
     // println!("State: {:?}", state);
 
-    if let Some(worker_state) = state.get(&service_name) {
+    if let Some(worker_state) = worker_states.get(&service_name) {
         if worker_state.on_crash {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -62,9 +84,9 @@ async fn get_health(
     };
 }
 
-async fn run_service(
+async fn run_service_thunder(
     Path(service_name): Path<String>,
-    State(state): State<Arc<Mutex<HashMap<String, WorkerStates>>>>,
+    State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
     let state = match state.lock() {
         Ok(val) => val,
@@ -76,24 +98,69 @@ async fn run_service(
         }
     };
 
-    // println!("Service name: {}", service_name);
-    // println!("State: {:?}", state);
-
-    if let Some(worker_state) = state.get(&service_name) {
-        if worker_state.on_crash {
+    let runner_state = match state.runner_states.lock() {
+        Ok(val) => val,
+        Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Health service is not available".to_string(),
+                "Error getting lock".to_string(),
             );
-        } else if worker_state.alive {
-            return (StatusCode::OK, "OK".to_string());
-        } else {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Service is not available".to_string(),
-            );
+        }
+    };
+
+    // Schedule a run for the service.
+
+    if let Some(runner_state) = runner_state.get(&service_name) {
+        // Check if the service is already running.
+        match runner_state.channel_trigger.send(()) {
+            Ok(_) => {
+                return (StatusCode::OK, "Service is running".to_string());
+            }
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Error sending trigger to service".to_string(),
+                );
+            }
         }
     } else {
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
+    }
+}
+
+async fn get_service_stats(
+    Path(service_name): Path<String>,
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> (StatusCode, String) {
+    let state = match state.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
     };
+
+    let runner_state = match state.runner_states.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
+    };
+
+    if let Some(runner_state) = runner_state.get(&service_name) {
+        return (
+            StatusCode::OK,
+            format!(
+                "Service: {}\nLast run: {:?}\nLast run success: {}\n",
+                runner_state.module_name, runner_state.last_run, runner_state.last_run_success
+            ),
+        );
+    } else {
+        return (StatusCode::NOT_FOUND, "Service not found".to_string());
+    }
 }
