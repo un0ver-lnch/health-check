@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const targets: []const std.Target.Query = &.{ .{ .cpu_arch = .wasm64, .os_tag = .wasi }, .{ .cpu_arch = .wasm32, .os_tag = .wasi }, .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .gnu } };
+const targets: []const std.Target.Query = &.{ .{ .cpu_arch = .wasm64, .os_tag = .wasi }, .{ .cpu_arch = .wasm32, .os_tag = .wasi }, .{ .cpu_arch = builtin.cpu.arch, .os_tag = builtin.os.tag, .abi = .gnu } };
 
 pub fn build(b: *std.Build) !void {
     b.enable_wasmtime = true;

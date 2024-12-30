@@ -2,6 +2,7 @@
 
 {
   # https://devenv.sh/basics/
+  dotenv.enable = true;
 
   # https://devenv.sh/packages/
   packages = [  ];
