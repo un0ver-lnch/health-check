@@ -209,6 +209,7 @@ fn main() {
             let module = Box::new(module);
             while let Ok(_) = channel_reciver.recv() {
                 let (stdout_tx, mut stdout_rx) = Pipe::channel();
+                let (stderr_tx, mut stderr_rx) = Pipe::channel();
                 //let mut stdout_rx = stdout_rx.clone();
                 //let stdout_tx = stdout_tx.clone();
                 let module = module.clone();
@@ -218,6 +219,7 @@ fn main() {
                     // .args(&["world"])
                     // .env("KEY", "Value")
                     .stdout(Box::new(stdout_tx))
+                    .stderr(Box::new(stderr_tx))
                     .run_with_store(*module, &mut store);
 
                 let _ = match builder {
@@ -238,24 +240,17 @@ fn main() {
                 let mut buf = String::new();
                 stdout_rx.read_to_string(&mut buf).unwrap();
 
+                let mut bur_err = String::new();
+                stderr_rx.read_to_string(&mut bur_err).unwrap();
+
+                let stderr_split = bur_err.split("\n").collect::<Vec<&str>>();
+
+                for err_line in stderr_split {
+                    if err_line.starts_with("KV:") {}
+                }
+
                 // println!("Read \"{}\" from the WASI stdout!", buf.trim());
                 // println!("{} == {} = {}", buf, "true", buf.trim().eq("true"));
-
-                if buf.eq("true") {
-                    runner_states
-                        .lock()
-                        .unwrap()
-                        .get_mut(&runner.module_name)
-                        .unwrap()
-                        .last_run_success = true;
-                } else {
-                    runner_states
-                        .lock()
-                        .unwrap()
-                        .get_mut(&runner.module_name)
-                        .unwrap()
-                        .last_run_success = false;
-                }
             }
         });
     }

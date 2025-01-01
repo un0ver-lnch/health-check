@@ -59,7 +59,7 @@ pub fn main() !void {
     std.debug.print("Current time {?}\n", .{current_time});
 
     if (current_time > parsed_contents.sys.sunrise and current_time < parsed_contents.sys.sunset) {
-        // TODO: detect bad wheater or bad visibility to turn on the light
+        // TODO: detect bad wheater or bad visibility to turn on the lightx
         std.debug.print("It's day time\n", .{});
     } else {
         std.debug.print("It's night time\n", .{});
