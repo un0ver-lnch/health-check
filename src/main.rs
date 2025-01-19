@@ -2,20 +2,32 @@ mod api;
 
 mod types;
 
-use types::{RunnerState, WasmRunner, WasmWorker, WorkerStates};
+mod persistency;
+
+use libloading::{Library, Symbol};
+use persistency::Save;
+
+use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
 
 use std::{
     collections::HashMap,
+    ffi::{CStr, CString},
+    fs::canonicalize,
     io::Read,
+    os::raw::c_char,
     sync::{Arc, Mutex},
 };
 
 use indicatif::ProgressBar;
 use wasmer::{Module, Store};
+#[macro_use]
+extern crate defer;
 
 use wasmer_wasix::{Pipe, WasiEnv};
 
 fn main() {
+    let connection = sqlite::open(":memory:").expect("Could not create in memory db");
+    let connection_mutex = Arc::new(Mutex::new(connection));
     let bar = ProgressBar::new_spinner();
     let modules_folder_path = match std::env::var("MODULES_PATH") {
         Ok(val) => val,
@@ -23,6 +35,14 @@ fn main() {
             panic!("Error: MODULES_PATH env variable not set");
         }
     };
+    bar.set_message("Generate full environment variables string");
+
+    let mut env_vars = std::env::vars();
+    let mut env_vars_string = String::new();
+    while let Some((key, value)) = env_vars.next() {
+        env_vars_string.push_str(&format!("{}={};;;", key, value));
+    }
+
     bar.set_message("Checking if MODULES_PATH folder exists");
     match std::fs::exists(&modules_folder_path) {
         Ok(val) => {
@@ -44,6 +64,8 @@ fn main() {
 
     let mut wasm_containers: Vec<WasmWorker> = Vec::new();
     let mut wasm_run_containers: Vec<WasmRunner> = Vec::new();
+    let mut dll_run_containers: Vec<DLLRunner> = Vec::new();
+    let mut dll_containers: Vec<DLLRunner> = Vec::new();
     bar.set_message("Reading files in MODULES_PATH folder");
     for entry in modules_path_iterator {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
@@ -60,10 +82,6 @@ fn main() {
             panic!("Error: MODULES_PATH folder contains a directory");
         }
 
-        if entry.file_name().to_str().unwrap().ends_with(".wasm") == false {
-            continue;
-        }
-
         bar.set_message(format!(
             "Reading {} file...",
             entry.file_name().to_str().unwrap()
@@ -74,16 +92,30 @@ fn main() {
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
             });
-        } else {
+        } else if entry.file_name().to_str().unwrap().ends_with(".wasm") {
             wasm_containers.push(WasmWorker {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
             });
+        } else if entry.file_name().to_str().unwrap().ends_with("_run.so") {
+            dll_run_containers.push(DLLRunner {
+                module_name: entry.file_name().to_str().unwrap().to_string(),
+                path: canonicalize(entry_path).unwrap().display().to_string(),
+            });
+        } else if entry.file_name().to_str().unwrap().ends_with(".so") {
+            dll_containers.push(DLLRunner {
+                module_name: entry.file_name().to_str().unwrap().to_string(),
+                path: canonicalize(entry_path).unwrap().display().to_string(),
+            });
         }
     }
 
-    if wasm_containers.is_empty() {
+    if wasm_containers.is_empty()
+        && wasm_run_containers.is_empty()
+        && dll_run_containers.is_empty()
+        && dll_containers.is_empty()
+    {
         bar.finish_with_message("No modules found, exiting...");
         return;
     }
@@ -91,6 +123,7 @@ fn main() {
     bar.finish_with_message("Finished reading modules");
 
     let worker_states = Arc::new(Mutex::new(HashMap::new()));
+    let worker_connection = connection_mutex.clone();
 
     for entry in wasm_containers {
         let worker_states = worker_states.clone();
@@ -175,9 +208,101 @@ fn main() {
         });
     }
 
+    let native_worker_states = Arc::new(Mutex::new(HashMap::new()));
+    let native_worker_connection = connection_mutex.clone();
+
+    for entry in dll_containers {
+        let native_worker_states = native_worker_states.clone();
+        native_worker_states.lock().unwrap().insert(
+            entry.module_name.clone(),
+            types::NativeWorkerStates {
+                alive: false,
+                on_crash: false,
+            },
+        );
+
+        let lib = unsafe { Library::new(&entry.path) };
+
+        let lib = match lib {
+            Ok(val) => val,
+            Err(val) => {
+                eprintln!("Error: Could not load library: {}", val);
+                native_worker_states.lock().unwrap().insert(
+                    entry.module_name.clone(),
+                    types::NativeWorkerStates {
+                        alive: false,
+                        on_crash: true,
+                    },
+                );
+                continue;
+            }
+        };
+
+        std::thread::spawn(move || {
+            let native_worker_states = native_worker_states.clone();
+
+            let exec_lib_func: Symbol<unsafe extern "C" fn() -> *const c_char> =
+                unsafe { lib.get(b"start").unwrap() };
+            let exec_lib_result_free: Symbol<unsafe extern "C" fn(*const c_char) -> ()> =
+                unsafe { lib.get(b"free_string").unwrap() };
+
+            loop {
+                let result = unsafe { exec_lib_func() };
+                defer! {
+                    // We need to free the result string
+                    unsafe { exec_lib_result_free(result) }
+                };
+                let result_as_string = unsafe { CStr::from_ptr(result as *mut c_char) };
+
+                let result_as_string = result_as_string.to_string_lossy().to_string();
+
+                let result_splited = result_as_string.split("\n").collect::<Vec<&str>>();
+
+                assert!(result_splited.len() == 1);
+
+                for out_line in result_splited {
+                    match out_line {
+                        "True" => {
+                            let mut native_state_lock = native_worker_states.lock().unwrap();
+
+                            let native_state =
+                                native_state_lock.get_mut(&entry.module_name).unwrap();
+
+                            native_state.alive = true;
+                        }
+                        "False" => {
+                            let mut native_state_lock = native_worker_states.lock().unwrap();
+
+                            let native_state =
+                                native_state_lock.get_mut(&entry.module_name).unwrap();
+
+                            native_state.alive = false;
+                        }
+
+                        "Crash" => {
+                            let mut native_state_lock = native_worker_states.lock().unwrap();
+
+                            let native_state =
+                                native_state_lock.get_mut(&entry.module_name).unwrap();
+
+                            native_state.alive = false;
+                            native_state.on_crash = true;
+                        }
+                        _ => {
+                            panic!("Error: Unknown response from native worker");
+                        }
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_secs(60));
+            }
+        });
+    }
+
     let runner_states = Arc::new(Mutex::new(HashMap::new()));
+    let runner_connection = connection_mutex.clone();
 
     for runner in wasm_run_containers {
+        let runner_connection = runner_connection.clone();
         let runner_states = runner_states.clone();
 
         let (channel_trigger, channel_reciver) = std::sync::mpsc::channel();
@@ -240,13 +365,43 @@ fn main() {
                 let mut buf = String::new();
                 stdout_rx.read_to_string(&mut buf).unwrap();
 
+                let stdout_split = buf.split("\n").collect::<Vec<&str>>();
+
+                for out_line in stdout_split {
+                    if out_line.starts_with("KV:") {
+                        let filtered_data = out_line.replace("KV:", "");
+
+                        let key_value_split = filtered_data.split("###").collect::<Vec<&str>>();
+
+                        let key = key_value_split[0].to_string();
+                        let value = key_value_split[1].to_string();
+
+                        let key_value_pair = persistency::KeyValuePair { key, value };
+
+                        match key_value_pair.persist(&runner_connection.lock().unwrap()) {
+                            Ok(_) => {
+                                println!(
+                                    "Persisted key: {} with value: {}",
+                                    &key_value_pair.key, &key_value_pair.value
+                                );
+                            }
+                            Err(_) => {
+                                eprintln!(
+                                    "Error: Could not persist key: {} with value: {}",
+                                    &key_value_pair.key, &key_value_pair.value
+                                );
+                            }
+                        };
+                    }
+                }
+
                 let mut bur_err = String::new();
                 stderr_rx.read_to_string(&mut bur_err).unwrap();
 
                 let stderr_split = bur_err.split("\n").collect::<Vec<&str>>();
 
                 for err_line in stderr_split {
-                    if err_line.starts_with("KV:") {}
+                    println!("RUNNER {}: {}", &runner.module_name, err_line);
                 }
 
                 // println!("Read \"{}\" from the WASI stdout!", buf.trim());
@@ -255,9 +410,117 @@ fn main() {
         });
     }
 
+    let native_states = Arc::new(Mutex::new(HashMap::new()));
+    let native_connection = connection_mutex.clone();
+    for native_runner in dll_run_containers {
+        let native_states = native_states.clone();
+        let native_connection = native_connection.clone();
+        let env_vars_string = env_vars_string.clone();
+
+        let lib = unsafe { Library::new(&native_runner.path) };
+
+        let (channel_trigger, channel_reciver) = std::sync::mpsc::channel::<()>();
+
+        let lib = match lib {
+            Ok(val) => val,
+            Err(val) => {
+                eprintln!("Error: Could not load library: {}", val);
+                native_states.lock().unwrap().insert(
+                    native_runner.module_name.clone(),
+                    types::NativeStates {
+                        on_crash: true,
+                        last_run: std::time::Instant::now(),
+                        last_run_success: false,
+                        channel_trigger,
+                    },
+                );
+                continue;
+            }
+        };
+
+        native_states.lock().unwrap().insert(
+            native_runner.module_name.clone(),
+            types::NativeStates {
+                on_crash: false,
+                last_run: std::time::Instant::now(),
+                last_run_success: false,
+                channel_trigger,
+            },
+        );
+
+        std::thread::spawn(move || {
+            let native_states = native_states.clone();
+            let env_vars_string = env_vars_string.clone();
+
+            let exec_lib_func: Symbol<unsafe extern "C" fn(env: *const c_char) -> *const c_char> =
+                unsafe { lib.get(b"start").unwrap() };
+            let exec_lib_result_free: Symbol<unsafe extern "C" fn(*const c_char) -> ()> =
+                unsafe { lib.get(b"free_string").unwrap() };
+
+            while let Ok(_) = channel_reciver.recv() {
+                let env_vars_string = CString::new(env_vars_string.clone()).unwrap();
+                let raw = env_vars_string.into_raw();
+                let result = unsafe { exec_lib_func(raw) };
+                defer! {
+                    // We need to free the result string
+                    unsafe { exec_lib_result_free(result) }
+                };
+                unsafe {
+                    let _env_vars_string = CString::from_raw(raw);
+                };
+                let result_as_string = unsafe { CStr::from_ptr(result as *mut c_char) };
+
+                let result_as_string = result_as_string.to_string_lossy().to_string();
+
+                let result_splited = result_as_string.split("\n").collect::<Vec<&str>>();
+
+                for out_line in result_splited {
+                    if out_line.starts_with("KV:") {
+                        let filtered_data = out_line.replace("KV:", "");
+
+                        let key_value_split = filtered_data.split("###").collect::<Vec<&str>>();
+
+                        let key = key_value_split[0].to_string();
+                        let value = key_value_split[1].to_string();
+
+                        let key_value_pair = persistency::KeyValuePair { key, value };
+
+                        match key_value_pair.persist(&native_connection.lock().unwrap()) {
+                            Ok(_) => {
+                                println!(
+                                    "Persisted key: {} with value: {}",
+                                    &key_value_pair.key, &key_value_pair.value
+                                );
+                            }
+                            Err(_) => {
+                                eprintln!(
+                                    "Error: Could not persist key: {} with value: {}",
+                                    &key_value_pair.key, &key_value_pair.value
+                                );
+                            }
+                        };
+                    }
+                }
+                let mut native_state_lock = native_states.lock().unwrap();
+
+                let native_state = native_state_lock
+                    .get_mut(&native_runner.module_name)
+                    .unwrap();
+
+                native_state.last_run_success = true;
+                native_state.last_run = std::time::Instant::now();
+            }
+        });
+    }
+
     std::thread::spawn(move || {
         //let worker_states = worker_states.clone();
-        api::create_server(worker_states, runner_states);
+        api::create_server(
+            worker_states,
+            native_worker_states,
+            runner_states,
+            native_states,
+        );
     });
 
     std::thread::park();

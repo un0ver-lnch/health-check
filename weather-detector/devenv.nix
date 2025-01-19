@@ -10,6 +10,7 @@
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
   languages.zig.enable = true;
+  # languages.zig.package = pkgs.zig_0_12;
 
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";

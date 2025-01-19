@@ -2,6 +2,7 @@
 
 {
   # https://devenv.sh/basics/
+  dotenv.enable = true;
   env.MODULES_PATH = "./modules";
 
   # https://devenv.sh/packages/
