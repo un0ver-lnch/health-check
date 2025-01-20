@@ -24,6 +24,20 @@ pub fn build(b: *std.Build) !void {
                     },
                 },
             });
+
+            const exe_check = b.addExecutable(.{
+                .name = "foo",
+                .root_source_file = b.path("src/main.zig"),
+                .target = b.resolveTargetQuery(target),
+                .optimize = .Debug,
+            });
+            exe_check.linkLibC();
+
+            // These two lines you might want to copy
+            // (make sure to rename 'exe_check')
+            const check = b.step("check", "Check if foo compiles");
+            check.dependOn(&exe_check.step);
+
             const run_exe = b.addRunArtifact(exe);
             const run_step = b.step("run", "Run the application");
             run_step.dependOn(&run_exe.step);
