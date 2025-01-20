@@ -25,6 +25,10 @@ jobs:
         run: cd bitsearch-health && zig build
       - name: LS
         run: ls bitsearch-health
+      - name: LS
+        run: ls bitsearch-health/zig-out
+      - name: LS
+        run: ls bitsearch-health/zig-out/aarch64-linux-gnu
       - name: Publish zig so module
         uses: actions/upload-artifact@v4
         with:
