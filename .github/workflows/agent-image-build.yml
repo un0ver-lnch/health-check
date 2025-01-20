@@ -6,6 +6,12 @@ on:
   push:
     branches:
       - trunk
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Dockerfile"
+      - ".github/workflows/agent-image-build.yml"
+
 jobs:
   Build-Agent-DockerImage:
     runs-on: ubuntu-latest
