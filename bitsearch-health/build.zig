@@ -3,13 +3,15 @@ const builtin = @import("builtin");
 
 const targets: []const std.Target.Query = &.{ .{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .gnu }, .{ .cpu_arch = builtin.cpu.arch, .os_tag = builtin.os.tag, .abi = .gnu } };
 
+const app_name = "bitsearch-health";
+
 pub fn build(b: *std.Build) !void {
     for (targets) |target| {
         if (builtin.cpu.arch == target.cpu_arch) {
             const run_in_release_mode_option = b.option(bool, "release", "Run the library in release mode") orelse false;
 
             const exe = b.addExecutable(.{
-                .name = "bitseach-health",
+                .name = app_name,
                 .root_source_file = b.path("src/main.zig"),
                 .target = b.resolveTargetQuery(target),
                 .optimize = if (run_in_release_mode_option) .ReleaseFast else .Debug,
@@ -28,7 +30,7 @@ pub fn build(b: *std.Build) !void {
             b.getInstallStep().dependOn(&target_output.step);
         }
         const lib = b.addSharedLibrary(.{
-            .name = "bitseach-health",
+            .name = app_name,
             .root_source_file = b.path("src/main.zig"),
             .target = b.resolveTargetQuery(target),
             .optimize = .ReleaseFast,
