@@ -294,6 +294,7 @@ fn main() {
                                 native_state_lock.get_mut(&entry.module_name).unwrap();
 
                             native_state.alive = true;
+                            native_state.on_crash = false;
                         }
                         "False" => {
                             let mut native_state_lock = native_worker_states.lock().unwrap();
@@ -302,8 +303,8 @@ fn main() {
                                 native_state_lock.get_mut(&entry.module_name).unwrap();
 
                             native_state.alive = false;
+                            native_state.on_crash = false;
                         }
-
                         "Crash" => {
                             let mut native_state_lock = native_worker_states.lock().unwrap();
 
