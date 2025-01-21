@@ -2,6 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
+const error_log_print = "ZIG ERROR: {s}\n";
+
 const PossibleReturnValues = enum(u2) {
     ok,
     not_okey,
@@ -121,7 +123,14 @@ export fn start() [*]const u8 {
     // Dont free this memory as we are returning it to the caller
     const c_allocator = std.heap.c_allocator;
 
-    const result = bitseaarch(allocator) catch {
+    const result = bitseaarch(allocator) catch |error_out| {
+        switch (error_out) {
+            error.SystemResources => std.debug.print(error_log_print, .{"The method returned a SystemResources error. Most likely the system ran out of memory."}),
+            error.Unexpected => std.debug.print(error_log_print, .{"The method returned an Unexpected error. No more info, sorry."}),
+            error.OutOfMemory => std.debug.print(error_log_print, .{"The method returned an OutOfMemory error. Most likely the system ran out of memory."}),
+            error.ThreadQuotaExceeded => std.debug.print(error_log_print, .{"The method returned a ThreadQuotaExceeded error. Most likely the system ran out of memory."}),
+            error.LockedMemoryLimitExceeded => std.debug.print(error_log_print, .{"The method returned a LockedMemoryLimitExceeded error. Most likely the system ran out of memory."}),
+        }
         return ReturnValue.allocate_status_result(
             c_allocator,
             ReturnValue.init(PossibleReturnValues.crash).calculate_return_value_string(),
