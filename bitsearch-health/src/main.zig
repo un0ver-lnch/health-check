@@ -48,6 +48,7 @@ const ThreadedRequestProcessor = struct {
         array_list: *std.ArrayList(u2),
     ) void {
         errdefer {
+            std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the errdefer."});
             mutex.lock();
             array_list.append(@intFromEnum(PossibleReturnValues.crash)) catch unreachable;
             mutex.unlock();
@@ -66,12 +67,14 @@ const ThreadedRequestProcessor = struct {
                 .server_header_buffer = header_buffer,
             },
         ) catch {
+            std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the Client.open() catch."});
             array_list.append(@intFromEnum(PossibleReturnValues.crash)) catch unreachable;
             return;
         };
         defer request.deinit();
 
         request.send() catch {
+            std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the request.send() catch."});
             array_list.append(@intFromEnum(PossibleReturnValues.crash)) catch unreachable;
             return;
         };
@@ -80,6 +83,7 @@ const ThreadedRequestProcessor = struct {
             mutex.unlock();
             defer mutex.lock();
             request.wait() catch {
+                std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the request.wait() catch."});
                 mutex.lock();
                 defer mutex.unlock();
                 array_list.append(@intFromEnum(PossibleReturnValues.crash)) catch unreachable;
