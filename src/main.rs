@@ -128,19 +128,19 @@ fn main() {
     if modules_folder_path {
         bar.set_message("Printing modules");
         for entry in wasm_containers.iter() {
-            bar.println(format!("Wasm module: {}", entry.module_name));
+            println!("Wasm module: {}", entry.module_name);
         }
 
         for entry in wasm_run_containers.iter() {
-            bar.println(format!("Wasm runner: {}", entry.module_name));
+            println!("Wasm runner: {}", entry.module_name);
         }
 
         for entry in dll_run_containers.iter() {
-            bar.println(format!("DLL runner: {}", entry.module_name));
+            println!("DLL runner: {}", entry.module_name);
         }
 
         for entry in dll_containers.iter() {
-            bar.println(format!("DLL module: {}", entry.module_name));
+            println!("DLL module: {}", entry.module_name);
         }
     }
 
