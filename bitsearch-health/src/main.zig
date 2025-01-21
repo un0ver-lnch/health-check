@@ -203,7 +203,7 @@ fn bitseaarch(allocator: Allocator) !PossibleReturnValues {
             .ok => continue,
             .not_okey => return PossibleReturnValues.not_okey,
             .crash => {
-                std.debug.print(error_log_print, .{"The thread added a crash result."});
+                std.debug.print(error_log_print, .{"The thread added a crash result to the resulting arraylist."});
                 return PossibleReturnValues.crash;
             },
         }

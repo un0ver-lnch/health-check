@@ -294,7 +294,6 @@ fn main() {
                                 native_state_lock.get_mut(&entry.module_name).unwrap();
 
                             native_state.alive = true;
-                            eprintln!("Native worker {} is alive", &entry.module_name);
                         }
                         "False" => {
                             let mut native_state_lock = native_worker_states.lock().unwrap();
@@ -303,7 +302,6 @@ fn main() {
                                 native_state_lock.get_mut(&entry.module_name).unwrap();
 
                             native_state.alive = false;
-                            eprintln!("Native worker {} is False", &entry.module_name);
                         }
 
                         "Crash" => {
@@ -314,11 +312,8 @@ fn main() {
 
                             native_state.alive = false;
                             native_state.on_crash = true;
-                            eprintln!("Native worker {} is Crash", &entry.module_name);
                         }
-                        _ => {
-                            panic!("Error: Unknown response from native worker");
-                        }
+                        _ => {}
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_secs(60));
