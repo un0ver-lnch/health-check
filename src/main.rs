@@ -120,6 +120,30 @@ fn main() {
         return;
     }
 
+    let modules_folder_path = match std::env::var("SHOW_MODULES_CONSOLE") {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
+    if modules_folder_path {
+        bar.set_message("Reading modules");
+        for entry in wasm_containers.iter() {
+            bar.println(format!("Wasm module: {}", entry.module_name));
+        }
+
+        for entry in wasm_run_containers.iter() {
+            bar.println(format!("Wasm runner: {}", entry.module_name));
+        }
+
+        for entry in dll_run_containers.iter() {
+            bar.println(format!("DLL runner: {}", entry.module_name));
+        }
+
+        for entry in dll_containers.iter() {
+            bar.println(format!("DLL module: {}", entry.module_name));
+        }
+    }
+
     bar.finish_with_message("Finished reading modules");
 
     let worker_states = Arc::new(Mutex::new(HashMap::new()));
