@@ -126,7 +126,7 @@ fn main() {
     };
 
     if modules_folder_path {
-        bar.set_message("Reading modules");
+        bar.set_message("Printing modules");
         for entry in wasm_containers.iter() {
             bar.println(format!("Wasm module: {}", entry.module_name));
         }
@@ -164,7 +164,8 @@ fn main() {
             // Let's compile the Wasm module.
             let module = match Module::new(&store, &entry.bytes) {
                 Ok(val) => val,
-                Err(_) => {
+                Err(err) => {
+                    eprintln!("Error: Could not compile Wasm module: {}", err);
                     panic!("Error: Could not compile Wasm module");
                 }
             };

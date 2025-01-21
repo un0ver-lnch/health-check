@@ -4,6 +4,7 @@
   # https://devenv.sh/basics/
   dotenv.enable = true;
   env.MODULES_PATH = "./modules";
+  env.SHOW_MODULES_CONSOLE = "true";
 
   # https://devenv.sh/packages/
   packages = [ pkgs.llvm_15 ];
