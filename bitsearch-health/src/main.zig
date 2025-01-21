@@ -202,7 +202,10 @@ fn bitseaarch(allocator: Allocator) !PossibleReturnValues {
         switch (converted_value) {
             .ok => continue,
             .not_okey => return PossibleReturnValues.not_okey,
-            .crash => return PossibleReturnValues.crash,
+            .crash => {
+                std.debug.print(error_log_print, .{"The thread added a crash result."});
+                return PossibleReturnValues.crash;
+            },
         }
     }
 
