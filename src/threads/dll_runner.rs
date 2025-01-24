@@ -31,8 +31,9 @@ pub fn spawn_dll_runner_threads(
         if let Err(val) = lib {
             eprintln!("Error: Could not load library: {}", val);
             native_states.lock().unwrap().insert(
-                native_runner.module_name,
+                native_runner.module_name.clone(),
                 types::NativeStates {
+                    module_name: native_runner.module_name.clone(),
                     on_crash: true,
                     last_run: std::time::Instant::now(),
                     last_run_success: false,
@@ -46,6 +47,7 @@ pub fn spawn_dll_runner_threads(
         native_states.lock().unwrap().insert(
             native_runner.module_name.clone(),
             types::NativeStates {
+                module_name: native_runner.module_name.clone(),
                 on_crash: false,
                 last_run: std::time::Instant::now(),
                 last_run_success: false,

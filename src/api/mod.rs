@@ -39,6 +39,10 @@ pub async fn create_server(
         .route("/thunder/lib/:service_name", post(run_lib_service_thunder))
         .route("/thunder/:service_name", post(run_service_thunder))
         .route("/thunder/stats/:service_name", get(get_service_stats))
+        .route(
+            "/thunder/stats/lib/:service_name",
+            get(get_lib_service_stats),
+        )
         .with_state(Arc::new(Mutex::new(app_state)));
 
     // run our app with hyper, listening globally on port 3000
@@ -253,6 +257,46 @@ async fn get_service_stats(
             format!(
                 "Service: {}\nLast run: {:?}\nLast run success: {}\n",
                 runner_state.module_name, runner_state.last_run, runner_state.last_run_success
+            ),
+        );
+    } else {
+        return (StatusCode::NOT_FOUND, "Service not found".to_string());
+    }
+}
+
+async fn get_lib_service_stats(
+    Path(service_name): Path<String>,
+    State(state): State<Arc<Mutex<AppState>>>,
+) -> (StatusCode, String) {
+    let state = match state.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
+    };
+
+    let native_state = match state.native_states.lock() {
+        Ok(val) => val,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting lock".to_string(),
+            );
+        }
+    };
+
+    if let Some(native_state) = native_state.get(&service_name) {
+        return (
+            StatusCode::OK,
+            format!(
+                "Service: {}\nLast run: {:?}\nLast run success: {}\nOn Crash: {}\n",
+                native_state.module_name,
+                native_state.last_run,
+                native_state.last_run_success,
+                native_state.on_crash
             ),
         );
     } else {

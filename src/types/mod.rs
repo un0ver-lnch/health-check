@@ -33,6 +33,7 @@ pub struct NativeWorkerStates {
 }
 
 pub struct NativeStates {
+    pub module_name: String,
     pub on_crash: bool,
     pub last_run: std::time::Instant,
     pub last_run_success: bool,
