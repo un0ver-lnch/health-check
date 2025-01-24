@@ -1,29 +1,20 @@
 mod api;
-
-mod types;
-
 mod persistency;
-
-use libloading::{Library, Symbol};
-use persistency::Save;
-
-use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
+mod threads;
+mod types;
 
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString},
     fs::canonicalize,
-    io::Read,
-    os::raw::c_char,
     sync::{Arc, Mutex},
 };
 
 use indicatif::ProgressBar;
-use wasmer::{Module, Store};
+use persistency::Save;
+use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
+
 #[macro_use]
 extern crate defer;
-
-use wasmer_wasix::{Pipe, WasiEnv};
 
 fn main() {
     let connection = sqlite::open(":memory:").expect("Could not create in memory db");
@@ -147,398 +138,25 @@ fn main() {
     bar.finish_with_message("Finished reading modules");
 
     let worker_states = Arc::new(Mutex::new(HashMap::new()));
-    let worker_connection = connection_mutex.clone();
-
-    for entry in wasm_containers {
-        let worker_states = worker_states.clone();
-        worker_states.lock().unwrap().insert(
-            entry.module_name.clone(),
-            WorkerStates {
-                alive: false,
-                on_crash: false,
-            },
-        );
-        std::thread::spawn(move || {
-            // Create a Store.
-            let mut store = Store::default();
-            // Let's compile the Wasm module.
-            let module = match Module::new(&store, &entry.bytes) {
-                Ok(val) => val,
-                Err(err) => {
-                    eprintln!("Error: Could not compile Wasm module: {}", err);
-                    panic!("Error: Could not compile Wasm module");
-                }
-            };
-
-            // let (stdout_tx, stdout_rx) = Pipe::channel();
-            // let stdout_rx = Box::new(stdout_rx);
-            // let stdout_tx = Box::new(stdout_tx);
-            let module = Box::new(module);
-            loop {
-                let (stdout_tx, mut stdout_rx) = Pipe::channel();
-                //let mut stdout_rx = stdout_rx.clone();
-                //let stdout_tx = stdout_tx.clone();
-                let module = module.clone();
-
-                // Run the module.
-                let builder = WasiEnv::builder(&entry.module_name)
-                    // .args(&["world"])
-                    // .env("KEY", "Value")
-                    .stdout(Box::new(stdout_tx))
-                    .run_with_store(*module, &mut store);
-
-                let _ = match builder {
-                    Ok(val) => val,
-                    Err(_) => {
-                        worker_states.lock().unwrap().insert(
-                            (&entry.module_name).to_string(),
-                            WorkerStates {
-                                alive: false,
-                                on_crash: true,
-                            },
-                        );
-
-                        panic!("Error: Could not run WasiEnv builder");
-                    }
-                };
-
-                // FIXME: Add better implementation of a health check.
-
-                let mut buf = String::new();
-                stdout_rx.read_to_string(&mut buf).unwrap();
-
-                // println!("Read \"{}\" from the WASI stdout!", buf.trim());
-                // println!("{} == {} = {}", buf, "true", buf.trim().eq("true"));
-
-                if buf.eq("true") {
-                    worker_states.lock().unwrap().insert(
-                        (&entry.module_name).to_string(),
-                        WorkerStates {
-                            alive: true,
-                            on_crash: false,
-                        },
-                    );
-                } else {
-                    worker_states.lock().unwrap().insert(
-                        (&entry.module_name).to_string(),
-                        WorkerStates {
-                            alive: false,
-                            on_crash: false,
-                        },
-                    );
-                }
-
-                std::thread::sleep(std::time::Duration::from_secs(60));
-            }
-        });
-    }
-
     let native_worker_states = Arc::new(Mutex::new(HashMap::new()));
-    let native_worker_connection = connection_mutex.clone();
-
-    for entry in dll_containers {
-        let native_worker_states = native_worker_states.clone();
-        native_worker_states.lock().unwrap().insert(
-            entry.module_name.clone(),
-            types::NativeWorkerStates {
-                alive: false,
-                on_crash: false,
-            },
-        );
-
-        let lib = unsafe { Library::new(&entry.path) };
-
-        let lib = match lib {
-            Ok(val) => val,
-            Err(val) => {
-                eprintln!("Error: Could not load library: {}", val);
-                native_worker_states.lock().unwrap().insert(
-                    entry.module_name.clone(),
-                    types::NativeWorkerStates {
-                        alive: false,
-                        on_crash: true,
-                    },
-                );
-                continue;
-            }
-        };
-
-        std::thread::spawn(move || {
-            let native_worker_states = native_worker_states.clone();
-
-            let exec_lib_func: Symbol<unsafe extern "C" fn() -> *const c_char> =
-                unsafe { lib.get(b"start").unwrap() };
-            let exec_lib_result_free: Symbol<unsafe extern "C" fn(*const c_char) -> ()> =
-                unsafe { lib.get(b"free_string").unwrap() };
-
-            loop {
-                let result = unsafe { exec_lib_func() };
-                defer! {
-                    // We need to free the result string
-                    unsafe { exec_lib_result_free(result) }
-                };
-                let result_as_string = unsafe { CStr::from_ptr(result as *mut c_char) };
-
-                let result_as_string = result_as_string.to_string_lossy().to_string();
-
-                let result_splited = result_as_string.split("\n").collect::<Vec<&str>>();
-
-                assert!(result_splited.len() == 1);
-
-                for out_line in result_splited {
-                    match out_line {
-                        "True" => {
-                            let mut native_state_lock = native_worker_states.lock().unwrap();
-
-                            let native_state =
-                                native_state_lock.get_mut(&entry.module_name).unwrap();
-
-                            native_state.alive = true;
-                            native_state.on_crash = false;
-                        }
-                        "False" => {
-                            let mut native_state_lock = native_worker_states.lock().unwrap();
-
-                            let native_state =
-                                native_state_lock.get_mut(&entry.module_name).unwrap();
-
-                            native_state.alive = false;
-                            native_state.on_crash = false;
-                        }
-                        "Crash" => {
-                            let mut native_state_lock = native_worker_states.lock().unwrap();
-
-                            let native_state =
-                                native_state_lock.get_mut(&entry.module_name).unwrap();
-
-                            native_state.alive = false;
-                            native_state.on_crash = true;
-                        }
-                        _ => {}
-                    }
-                }
-                std::thread::sleep(std::time::Duration::from_secs(60));
-            }
-        });
-    }
-
     let runner_states = Arc::new(Mutex::new(HashMap::new()));
-    let runner_connection = connection_mutex.clone();
-
-    for runner in wasm_run_containers {
-        let runner_connection = runner_connection.clone();
-        let runner_states = runner_states.clone();
-
-        let (channel_trigger, channel_reciver) = std::sync::mpsc::channel();
-
-        runner_states.lock().unwrap().insert(
-            runner.module_name.clone(),
-            RunnerState {
-                module_name: runner.module_name.clone(),
-                last_run: std::time::Instant::now(),
-                last_run_success: false,
-                channel_trigger,
-            },
-        );
-
-        std::thread::spawn(move || {
-            // Create a Store.
-            let mut store = Store::default();
-            // Let's compile the Wasm module.
-            let module = match Module::new(&store, &runner.bytes) {
-                Ok(val) => val,
-                Err(_) => {
-                    panic!("Error: Could not compile Wasm module");
-                }
-            };
-
-            // let (stdout_tx, stdout_rx) = Pipe::channel();
-            // let stdout_rx = Box::new(stdout_rx);
-            // let stdout_tx = Box::new(stdout_tx);
-            let module = Box::new(module);
-            while let Ok(_) = channel_reciver.recv() {
-                let (stdout_tx, mut stdout_rx) = Pipe::channel();
-                let (stderr_tx, mut stderr_rx) = Pipe::channel();
-                //let mut stdout_rx = stdout_rx.clone();
-                //let stdout_tx = stdout_tx.clone();
-                let module = module.clone();
-
-                // Run the module.
-                let builder = WasiEnv::builder(&runner.module_name)
-                    // .args(&["world"])
-                    // .env("KEY", "Value")
-                    .stdout(Box::new(stdout_tx))
-                    .stderr(Box::new(stderr_tx))
-                    .run_with_store(*module, &mut store);
-
-                let _ = match builder {
-                    Ok(val) => val,
-                    Err(_) => {
-                        runner_states
-                            .lock()
-                            .unwrap()
-                            .get_mut(&runner.module_name)
-                            .unwrap()
-                            .last_run_success = false;
-                        panic!("Error: Could not run WasiEnv builder");
-                    }
-                };
-
-                // FIXME: Add better implementation of a health check.
-
-                let mut buf = String::new();
-                stdout_rx.read_to_string(&mut buf).unwrap();
-
-                let stdout_split = buf.split("\n").collect::<Vec<&str>>();
-
-                for out_line in stdout_split {
-                    if out_line.starts_with("KV:") {
-                        let filtered_data = out_line.replace("KV:", "");
-
-                        let key_value_split = filtered_data.split("###").collect::<Vec<&str>>();
-
-                        let key = key_value_split[0].to_string();
-                        let value = key_value_split[1].to_string();
-
-                        let key_value_pair = persistency::KeyValuePair { key, value };
-
-                        match key_value_pair.persist(&runner_connection.lock().unwrap()) {
-                            Ok(_) => {
-                                println!(
-                                    "Persisted key: {} with value: {}",
-                                    &key_value_pair.key, &key_value_pair.value
-                                );
-                            }
-                            Err(_) => {
-                                eprintln!(
-                                    "Error: Could not persist key: {} with value: {}",
-                                    &key_value_pair.key, &key_value_pair.value
-                                );
-                            }
-                        };
-                    }
-                }
-
-                let mut bur_err = String::new();
-                stderr_rx.read_to_string(&mut bur_err).unwrap();
-
-                let stderr_split = bur_err.split("\n").collect::<Vec<&str>>();
-
-                for err_line in stderr_split {
-                    println!("RUNNER {}: {}", &runner.module_name, err_line);
-                }
-
-                // println!("Read \"{}\" from the WASI stdout!", buf.trim());
-                // println!("{} == {} = {}", buf, "true", buf.trim().eq("true"));
-            }
-        });
-    }
-
     let native_states = Arc::new(Mutex::new(HashMap::new()));
-    let native_connection = connection_mutex.clone();
-    for native_runner in dll_run_containers {
-        let native_states = native_states.clone();
-        let native_connection = native_connection.clone();
-        let env_vars_string = env_vars_string.clone();
 
-        let lib = unsafe { Library::new(&native_runner.path) };
-
-        let (channel_trigger, channel_reciver) = std::sync::mpsc::channel::<()>();
-
-        let lib = match lib {
-            Ok(val) => val,
-            Err(val) => {
-                eprintln!("Error: Could not load library: {}", val);
-                native_states.lock().unwrap().insert(
-                    native_runner.module_name.clone(),
-                    types::NativeStates {
-                        on_crash: true,
-                        last_run: std::time::Instant::now(),
-                        last_run_success: false,
-                        channel_trigger,
-                    },
-                );
-                continue;
-            }
-        };
-
-        native_states.lock().unwrap().insert(
-            native_runner.module_name.clone(),
-            types::NativeStates {
-                on_crash: false,
-                last_run: std::time::Instant::now(),
-                last_run_success: false,
-                channel_trigger,
-            },
-        );
-
-        std::thread::spawn(move || {
-            let native_states = native_states.clone();
-            let env_vars_string = env_vars_string.clone();
-
-            let exec_lib_func: Symbol<unsafe extern "C" fn(env: *const c_char) -> *const c_char> =
-                unsafe { lib.get(b"start").unwrap() };
-            let exec_lib_result_free: Symbol<unsafe extern "C" fn(*const c_char) -> ()> =
-                unsafe { lib.get(b"free_string").unwrap() };
-
-            while let Ok(_) = channel_reciver.recv() {
-                let env_vars_string = CString::new(env_vars_string.clone()).unwrap();
-                let raw = env_vars_string.into_raw();
-                let result = unsafe { exec_lib_func(raw) };
-                defer! {
-                    // We need to free the result string
-                    unsafe { exec_lib_result_free(result) }
-                };
-                unsafe {
-                    let _env_vars_string = CString::from_raw(raw);
-                };
-                let result_as_string = unsafe { CStr::from_ptr(result as *mut c_char) };
-
-                let result_as_string = result_as_string.to_string_lossy().to_string();
-
-                let result_splited = result_as_string.split("\n").collect::<Vec<&str>>();
-
-                for out_line in result_splited {
-                    if out_line.starts_with("KV:") {
-                        let filtered_data = out_line.replace("KV:", "");
-
-                        let key_value_split = filtered_data.split("###").collect::<Vec<&str>>();
-
-                        let key = key_value_split[0].to_string();
-                        let value = key_value_split[1].to_string();
-
-                        let key_value_pair = persistency::KeyValuePair { key, value };
-
-                        match key_value_pair.persist(&native_connection.lock().unwrap()) {
-                            Ok(_) => {
-                                println!(
-                                    "Persisted key: {} with value: {}",
-                                    &key_value_pair.key, &key_value_pair.value
-                                );
-                            }
-                            Err(_) => {
-                                eprintln!(
-                                    "Error: Could not persist key: {} with value: {}",
-                                    &key_value_pair.key, &key_value_pair.value
-                                );
-                            }
-                        };
-                    }
-                }
-                let mut native_state_lock = native_states.lock().unwrap();
-
-                let native_state = native_state_lock
-                    .get_mut(&native_runner.module_name)
-                    .unwrap();
-
-                native_state.last_run_success = true;
-                native_state.last_run = std::time::Instant::now();
-            }
-        });
-    }
+    threads::spawn_wasm_worker_threads(wasm_containers, worker_states.clone());
+    threads::spawn_dll_worker_threads(dll_containers, native_worker_states.clone());
+    threads::spawn_wasm_runner_threads(
+        wasm_run_containers,
+        runner_states.clone(),
+        connection_mutex.clone(),
+    );
+    threads::spawn_dll_runner_threads(
+        dll_run_containers,
+        native_states.clone(),
+        connection_mutex.clone(),
+        env_vars_string,
+    );
 
     std::thread::spawn(move || {
-        //let worker_states = worker_states.clone();
         api::create_server(
             worker_states,
             native_worker_states,
