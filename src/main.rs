@@ -17,6 +17,11 @@ use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
 extern crate defer;
 
 fn main() {
+    let _guard = sentry::init(("https://2130ee2772d283b4fc7fe8328922ebc5@o4508705910751232.ingest.de.sentry.io/4508715019796560", sentry::ClientOptions {
+        release: sentry::release_name!(),
+        ..Default::default()
+      }));
+
     let connection = sqlite::open(":memory:").expect("Could not create in memory db");
     let connection_mutex = Arc::new(Mutex::new(connection));
     let bar = ProgressBar::new_spinner();

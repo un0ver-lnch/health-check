@@ -2,22 +2,28 @@
 
 {
   # https://devenv.sh/basics/
-  dotenv.enable = true;
-  env.MODULES_PATH = "./modules";
-  env.SHOW_MODULES_CONSOLE = "true";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.llvm_15 pkgs.openssl ];
+  packages = [  ];
 
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
-  languages.rust.enable = true;
+  languages.typescript.enable = true;
+  languages.javascript = {
+    enable = true;
+    bun = {
+      enable = true;
+      install.enable = true;
+    };
+  };
 
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";
 
   # https://devenv.sh/services/
-  # services.postgres.enable = true;
+  services.postgres.enable = true;
+  services.redis.enable = true;
+  services.rabbitmq.enable = true;
 
   # https://devenv.sh/scripts/
   enterShell = ''

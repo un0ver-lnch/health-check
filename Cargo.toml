@@ -8,6 +8,7 @@ axum = { version = "0.7.9", features = ["http1", "tokio"], default-features = fa
 defer = "0.2.1"
 indicatif = { version = "0.17.9", default-features = false }
 libloading = "0.8.6"
+sentry = "0.36.0"
 sqlite = "0.36.1"
 tokio = { version = "1.42.0", features = ["rt-multi-thread"] }
 wasmer = "5.0.3"

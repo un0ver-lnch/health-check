@@ -1,0 +1,5 @@
+# Requirements
+
+- rabbitmq
+- redis
+- postgresql
