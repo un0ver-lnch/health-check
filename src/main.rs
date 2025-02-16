@@ -17,10 +17,18 @@ use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
 extern crate defer;
 
 fn main() {
-    let _guard = sentry::init(("https://2130ee2772d283b4fc7fe8328922ebc5@o4508705910751232.ingest.de.sentry.io/4508715019796560", sentry::ClientOptions {
-        release: sentry::release_name!(),
-        ..Default::default()
-      }));
+    let _guard = sentry::init((
+        std::env::var("SENTRY_DSN").unwrap_or_else(|_| "".to_string()),
+        sentry::ClientOptions {
+            environment: Some(
+                std::env::var("RUST_ENV")
+                    .unwrap_or_else(|_| "local".to_string())
+                    .into(),
+            ),
+            release: sentry::release_name!(),
+            ..Default::default()
+        },
+    ));
 
     let connection = sqlite::open(":memory:").expect("Could not create in memory db");
     let connection_mutex = Arc::new(Mutex::new(connection));
@@ -145,7 +153,7 @@ fn main() {
     let worker_states = Arc::new(Mutex::new(HashMap::new()));
     let native_worker_states = Arc::new(Mutex::new(HashMap::new()));
     let runner_states = Arc::new(Mutex::new(HashMap::new()));
-    let native_states = Arc::new(Mutex::new(HashMap::new()));
+    let native_runner_states = Arc::new(Mutex::new(HashMap::new()));
 
     threads::spawn_wasm_worker_threads(wasm_containers, worker_states.clone());
     threads::spawn_dll_worker_threads(dll_containers, native_worker_states.clone());
@@ -156,7 +164,7 @@ fn main() {
     );
     threads::spawn_dll_runner_threads(
         dll_run_containers,
-        native_states.clone(),
+        native_runner_states.clone(),
         connection_mutex.clone(),
         env_vars_string,
     );
@@ -166,7 +174,7 @@ fn main() {
             worker_states,
             native_worker_states,
             runner_states,
-            native_states,
+            native_runner_states,
         );
     });
 

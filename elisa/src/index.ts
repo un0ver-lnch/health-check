@@ -7,9 +7,11 @@ Sentry.init({
 })
 
 import { Elysia } from "elysia";
-import Artifacts from "./artifacts";
+import { artifacts } from "./artifacts";
+import swagger from "@elysiajs/swagger";
 
 const app = new Elysia()
+    .use(swagger())
     .trace(async ({ onHandle }) => {
         onHandle(({ begin, onStop }) => {
             onStop(({ end }) => {
@@ -18,15 +20,19 @@ const app = new Elysia()
         })
     })
     .onError(({ error, code }) => {
+        console.log("Error", code);
         switch (code) {
             case "NOT_FOUND":
+                console.log(error);
                 return;
             default:
+                console.log(error);
                 Sentry.captureException(error);
         }
     })
-    .mount('/artifacts', Artifacts.fetch)
+    .get("/healthz", () => "OK")
     .get("/", () => "Hello Elysia")
+    .mount('/artifacts', artifacts.fetch)
     .listen(3000);
 
 console.log(

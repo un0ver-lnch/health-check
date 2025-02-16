@@ -16,7 +16,7 @@ struct AppState {
     worker_states: Arc<Mutex<HashMap<String, WorkerStates>>>,
     native_worker_states: Arc<Mutex<HashMap<String, NativeWorkerStates>>>,
     runner_states: Arc<Mutex<HashMap<String, RunnerState>>>,
-    native_states: Arc<Mutex<HashMap<String, NativeStates>>>,
+    native_runner_states: Arc<Mutex<HashMap<String, NativeStates>>>,
 }
 
 #[tokio::main]
@@ -24,13 +24,13 @@ pub async fn create_server(
     worker_states: Arc<Mutex<HashMap<String, WorkerStates>>>,
     native_worker_states: Arc<Mutex<HashMap<String, NativeWorkerStates>>>,
     runner_states: Arc<Mutex<HashMap<String, RunnerState>>>,
-    native_states: Arc<Mutex<HashMap<String, NativeStates>>>,
+    native_runner_states: Arc<Mutex<HashMap<String, NativeStates>>>,
 ) {
     let app_state = AppState {
         worker_states,
         native_worker_states,
         runner_states,
-        native_states,
+        native_runner_states,
     };
     // build our application with a single route
     let app = Router::new()
@@ -197,7 +197,7 @@ async fn run_lib_service_thunder(
         }
     };
 
-    let native_state = match state.native_states.lock() {
+    let native_runner_states = match state.native_runner_states.lock() {
         Ok(val) => val,
         Err(_) => {
             return (
@@ -209,9 +209,9 @@ async fn run_lib_service_thunder(
 
     // Schedule a run for the service.
 
-    if let Some(native_state) = native_state.get(&service_name) {
+    if let Some(native_runner_state) = native_runner_states.get(&service_name) {
         // Check if the service is already running.
-        match native_state.channel_trigger.send(()) {
+        match native_runner_state.channel_trigger.send(()) {
             Ok(_) => {
                 return (StatusCode::OK, "Service is running".to_string());
             }
@@ -278,7 +278,7 @@ async fn get_lib_service_stats(
         }
     };
 
-    let native_state = match state.native_states.lock() {
+    let native_runner_states = match state.native_runner_states.lock() {
         Ok(val) => val,
         Err(_) => {
             return (
@@ -288,15 +288,15 @@ async fn get_lib_service_stats(
         }
     };
 
-    if let Some(native_state) = native_state.get(&service_name) {
+    if let Some(native_runner_state) = native_runner_states.get(&service_name) {
         return (
             StatusCode::OK,
             format!(
                 "Service: {}\nLast run: {:?}\nLast run success: {}\nOn Crash: {}\n",
-                native_state.module_name,
-                native_state.last_run,
-                native_state.last_run_success,
-                native_state.on_crash
+                native_runner_state.module_name,
+                native_runner_state.last_run,
+                native_runner_state.last_run_success,
+                native_runner_state.on_crash
             ),
         );
     } else {

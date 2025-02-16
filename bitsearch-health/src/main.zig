@@ -47,6 +47,7 @@ const ThreadedRequestProcessor = struct {
         mutex: *std.Thread.Mutex,
         array_list: *std.ArrayList(u2),
     ) void {
+        std.debug.print("Thread {s} started\n", .{uri.path.percent_encoded});
         errdefer {
             std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the errdefer."});
             mutex.lock();
@@ -81,7 +82,9 @@ const ThreadedRequestProcessor = struct {
 
         {
             mutex.unlock();
+            std.debug.print("Thread {s} waiting\n", .{uri.path.percent_encoded});
             defer mutex.lock();
+            defer std.debug.print("Thread {s} finished\n", .{uri.path.percent_encoded});
             request.wait() catch {
                 std.debug.print(error_log_print, .{"The thread errored out. Generic and triggered from the request.wait() catch."});
                 mutex.lock();

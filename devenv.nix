@@ -5,9 +5,13 @@
   dotenv.enable = true;
   env.MODULES_PATH = "./modules";
   env.SHOW_MODULES_CONSOLE = "true";
+  env.SCCACHE_REDIS_ENDPOINT = "rediss://100.115.180.74:6379";
+  env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+  env.SCCACHE_LOG="debug";
+  env.SCCACHE_NO_DAEMON="1";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.llvm_15 pkgs.openssl ];
+  packages = [ pkgs.llvm_15 pkgs.openssl pkgs.sccache pkgs.redis ];
 
   # https://devenv.sh/languages/
   # languages.rust.enable = true;
