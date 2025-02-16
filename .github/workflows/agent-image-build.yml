@@ -39,7 +39,7 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}
   Build-Agent-DockerImage-Arm:
-    runs-on: ubuntu-24.04-arm
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write

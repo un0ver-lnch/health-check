@@ -11,7 +11,7 @@ on:
       - ".github/workflows/zig-hello-world-wasm-build.yml"
 jobs:
   Build-WASM-Module:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
