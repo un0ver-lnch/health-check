@@ -38,7 +38,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: zig-bitsearch-health
+          name: zig-hello-wasm
           path: download/
       - name: Tailscale
         uses: tailscale/github-action@v3
