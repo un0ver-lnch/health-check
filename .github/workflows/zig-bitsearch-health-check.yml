@@ -49,5 +49,5 @@ jobs:
           version: latest
       - name: Upload artifact to Elisia
         run: |
-          curl https://elisa.tail0edab.ts.net/upload --request PUT --header 'Content-Type: multipart/form-data' -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
+          curl https://elisa.tail0edab.ts.net/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
       

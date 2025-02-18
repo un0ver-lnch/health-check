@@ -49,4 +49,4 @@ jobs:
           version: latest
       - name: Upload artifact to Elisia
         run: |
-          curl https://elisa.tail0edab.ts.net/upload --request PUT --header 'Content-Type: multipart/form-data' -F 'file=@download/main.wasm' -F 'name=main.wasm'
+          curl https://elisa.tail0edab.ts.net/upload --request PUT -F 'file=@download/main.wasm' -F 'name=main.wasm'
