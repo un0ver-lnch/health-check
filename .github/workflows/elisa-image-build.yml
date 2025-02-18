@@ -35,4 +35,4 @@ jobs:
           context: "{{defaultContext}}:elisa"
           platforms: linux/arm64/v8
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}-elisa:${{ github.run_id }}
