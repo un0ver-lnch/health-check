@@ -28,3 +28,11 @@ jobs:
         with:
           name: zig-bitsearch-health
           path: bitsearch-health/zig-out/aarch64-linux-gnu/libbitsearch-health.so
+      - name: Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - run: curl https://elisa.tail0edab.ts.net/
+      
