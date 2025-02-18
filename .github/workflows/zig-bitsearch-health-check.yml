@@ -47,5 +47,7 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
           version: latest
-      - run: curl https://elisa.tail0edab.ts.net/
+      - name: Upload artifact to Elisia
+        run: |
+          curl https://elisa.tail0edab.ts.net/upload --request PUT --header 'Content-Type: multipart/form-data' -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'"
       
