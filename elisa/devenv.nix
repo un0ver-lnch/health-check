@@ -2,6 +2,8 @@
 
 {
   # https://devenv.sh/basics/
+  env.MODULES_DOWNLOAD = "./modules";
+  dotenv.enable = true;
 
   # https://devenv.sh/packages/
   packages = [  ];
