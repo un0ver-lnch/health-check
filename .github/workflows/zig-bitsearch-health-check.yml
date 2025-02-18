@@ -29,6 +29,7 @@ jobs:
           name: zig-bitsearch-health
           path: bitsearch-health/zig-out/aarch64-linux-gnu/libbitsearch-health.so
   Deploy-Artifacts-Elisa:
+    needs: Build-SO-Module
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
