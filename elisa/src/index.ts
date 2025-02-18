@@ -37,16 +37,19 @@ const app = new Elysia({
     .put("/upload",
         async function* ({ body: { name, file } }) {
             const fileDescriptor = Bun.file(`${Bun.env.MODULES_DOWNLOAD}/${name}`);
+            const writer = fileDescriptor.writer();
             if (await fileDescriptor.exists()) fileDescriptor.delete();
             var percentage = 0;
             var current_copied = 0;
             for await (const chunk of file.stream()) {
-                await Bun.write(fileDescriptor, chunk);
+                writer.write(chunk);
                 current_copied += chunk.length;
                 percentage = Math.floor((current_copied / file.size) * 100);
                 console.log("Percentage:", percentage);
                 yield { percentage };
             }
+            writer.flush();
+            writer.end();
         },
         {
             body:
