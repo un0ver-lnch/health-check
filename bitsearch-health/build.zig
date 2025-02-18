@@ -1,7 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const targets: []const std.Target.Query = &.{ .{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .gnu }, .{ .cpu_arch = builtin.cpu.arch, .os_tag = builtin.os.tag, .abi = .gnu } };
+//.{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .gnu },
+const targets: []const std.Target.Query = &.{.{ .cpu_arch = builtin.cpu.arch, .os_tag = builtin.os.tag, .abi = .gnu }};
 
 const app_name = "bitsearch-health";
 
