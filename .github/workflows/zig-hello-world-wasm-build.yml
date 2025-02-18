@@ -28,7 +28,7 @@ jobs:
         with:
           name: zig-hello-wasm
           path: zig-hello-wasm/main.wasm
-    Deploy-Artifacts-Elisa:
+  Deploy-Artifacts-Elisa:
     needs: Build-SO-Module
     runs-on: ubuntu-24.04-arm
     permissions:
