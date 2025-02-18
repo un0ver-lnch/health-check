@@ -28,3 +28,25 @@ jobs:
         with:
           name: zig-hello-wasm
           path: zig-hello-wasm/main.wasm
+    Deploy-Artifacts-Elisa:
+    needs: Build-SO-Module
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zig-bitsearch-health
+          path: download/
+      - name: Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: latest
+      - name: Upload artifact to Elisia
+        run: |
+          curl https://elisa.tail0edab.ts.net/upload --request PUT --header 'Content-Type: multipart/form-data' -F 'file=@download/main.wasm' -F 'name=main.wasm'

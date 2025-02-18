@@ -37,6 +37,7 @@ const app = new Elysia({
     .put("/upload",
         async function* ({ body: { name, file } }) {
             const fileDescriptor = Bun.file(`${Bun.env.MODULES_DOWNLOAD}/${name}`);
+            if (await fileDescriptor.exists()) fileDescriptor.delete();
             var percentage = 0;
             var current_copied = 0;
             for await (const chunk of file.stream()) {
