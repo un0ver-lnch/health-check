@@ -36,11 +36,18 @@ const app = new Elysia({
     .get("/", () => "Hello Elysia")
     .put("/upload",
         async function* ({ body: { name, file } }) {
-            const fileDescriptor = Bun.file(`${Bun.env.MODULES_DOWNLOAD}/${name}`);
-            const writer = fileDescriptor.writer();
-            if (await fileDescriptor.exists()) fileDescriptor.delete();
+            const path = `${Bun.env.MODULES_DOWNLOAD}/${name}`;
+            const checkingFile = Bun.file(path);
+            try {
+                await checkingFile.delete();
+            } catch (error) {
+                console.log(error);
+            }
             var percentage = 0;
             var current_copied = 0;
+            const fileDescriptor = Bun.file(path);
+            await Bun.write(fileDescriptor, "");
+            const writer = fileDescriptor.writer();
             for await (const chunk of file.stream()) {
                 writer.write(chunk);
                 current_copied += chunk.length;
