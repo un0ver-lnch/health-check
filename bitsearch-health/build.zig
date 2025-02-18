@@ -8,7 +8,7 @@ const app_name = "bitsearch-health";
 pub fn build(b: *std.Build) !void {
     for (targets) |target| {
         if (builtin.cpu.arch == target.cpu_arch) {
-            const run_in_release_mode_option = b.option(bool, "release", "Run the library in release mode") orelse false;
+            const run_in_release_mode_option = b.option(bool, "run_release", "Run the library in release mode") orelse false;
 
             const exe = b.addExecutable(.{
                 .name = app_name,
