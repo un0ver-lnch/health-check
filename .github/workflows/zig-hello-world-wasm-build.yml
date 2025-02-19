@@ -51,6 +51,8 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - uses: azure/setup-kubectl@v4
+        id: install
       - name: Config kubectl
         run: |
           echo "$KUBECONFIG_CI" > kubeconfig
