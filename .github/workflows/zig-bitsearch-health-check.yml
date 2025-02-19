@@ -40,14 +40,25 @@ jobs:
         with:
           name: zig-bitsearch-health
           path: download/
-      - name: Tailscale
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: latest
       - name: Upload artifact to Elisia
         run: |
-          curl https://elisa.tail0edab.ts.net/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
+  Restart-Pods:
+    needs: Deploy-Artifacts-Elisa
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Config kubectl
+        run: |
+          echo "$KUBECONFIG_CI" > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+          kubectl get pods
+        env:
+          KUBECONFIG_CI: ${{ secrets.KUBECONFIG_CI }}
+      - name: Restart pods
+        run: |
+          kubectl rollout restart deployment health-check-agent -n health-check
       

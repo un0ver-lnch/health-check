@@ -30,7 +30,7 @@ jobs:
           path: zig-hello-wasm/main.wasm
   Deploy-Artifacts-Elisa:
     needs: Build-WASM-Module
-    runs-on: ubuntu-24.04-arm
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
@@ -40,13 +40,23 @@ jobs:
         with:
           name: zig-hello-wasm
           path: download/
-      - name: Tailscale
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          version: latest
-      - name: Upload artifact to Elisia
         run: |
-          curl https://elisa.tail0edab.ts.net/upload --request PUT -F 'file=@download/main.wasm' -F 'name=main.wasm'
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/main.wasm' -F 'name=main.wasm'
+  Restart-Pods:
+    needs: Deploy-Artifacts-Elisa
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Config kubectl
+        run: |
+          echo "$KUBECONFIG_CI" > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+          kubectl get pods
+        env:
+          KUBECONFIG_CI: ${{ secrets.KUBECONFIG_CI }}
+      - name: Restart pods
+        run: |
+          kubectl rollout restart deployment health-check-agent -n health-check
