@@ -35,7 +35,8 @@ fn main() {
     let bar = ProgressBar::new_spinner();
     let modules_folder_path = match std::env::var("MODULES_PATH") {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             panic!("Error: MODULES_PATH env variable not set");
         }
     };
@@ -54,14 +55,16 @@ fn main() {
                 panic!("Error: MODULES_PATH folder does not exist");
             }
         }
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             panic!("Error: MODULES_PATH folder does not exist");
         }
     };
     bar.set_message("Generating iterator for MODULES_PATH folder");
     let modules_path_iterator = match std::fs::read_dir(modules_folder_path) {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             panic!("Error: Could not read MODULES_PATH folder - Generating iterator failed");
         }
     };
@@ -121,6 +124,7 @@ fn main() {
         && dll_containers.is_empty()
     {
         bar.finish_with_message("No modules found, exiting...");
+        sentry::capture_message("No modules found", sentry::Level::Fatal);
         return;
     }
 

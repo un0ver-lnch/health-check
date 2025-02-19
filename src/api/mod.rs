@@ -9,6 +9,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use sentry::{add_breadcrumb, Breadcrumb};
 
 use crate::types::{NativeStates, NativeWorkerStates, RunnerState, WorkerStates};
 
@@ -54,9 +55,15 @@ async fn get_health(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some("get_health endpoint called".into()),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -66,7 +73,8 @@ async fn get_health(
 
     let worker_states = match state.worker_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -74,11 +82,22 @@ async fn get_health(
         }
     };
 
+    add_breadcrumb(Breadcrumb {
+        message: Some("worker_states lock acquired".into()),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     // println!("Service name: {}", service_name);
     // println!("State: {:?}", state);
 
     if let Some(worker_state) = worker_states.get(&service_name) {
         if worker_state.on_crash {
+            add_breadcrumb(Breadcrumb {
+                message: Some("Worker on crash".into()),
+                level: sentry::Level::Error,
+                ..Default::default()
+            });
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Health service is not available".to_string(),
@@ -86,12 +105,22 @@ async fn get_health(
         } else if worker_state.alive {
             return (StatusCode::OK, "OK".to_string());
         } else {
+            add_breadcrumb(Breadcrumb {
+                message: Some("Worker not alive".into()),
+                level: sentry::Level::Warning,
+                ..Default::default()
+            });
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Service is not available".to_string(),
             );
         }
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some("Service not found".into()),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     };
 }
@@ -100,9 +129,16 @@ async fn get_lib_health(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some("get_lib_health endpoint called".into()),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -112,7 +148,8 @@ async fn get_lib_health(
 
     let native_worker_states = match state.native_worker_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -120,21 +157,47 @@ async fn get_lib_health(
         }
     };
 
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!("Checking health for lib service: {}", service_name)),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     if let Some(native_worker_state) = native_worker_states.get(&service_name) {
         if native_worker_state.on_crash {
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!("Lib service {} is in crash state", service_name)),
+                level: sentry::Level::Error,
+                ..Default::default()
+            });
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Health service is not available".to_string(),
             );
         } else if native_worker_state.alive {
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!("Lib service {} is healthy", service_name)),
+                level: sentry::Level::Info,
+                ..Default::default()
+            });
             return (StatusCode::OK, "OK".to_string());
         } else {
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!("Lib service {} is not alive", service_name)),
+                level: sentry::Level::Warning,
+                ..Default::default()
+            });
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Service is not available".to_string(),
             );
         }
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("Lib service {} not found", service_name)),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     };
 }
@@ -143,9 +206,19 @@ async fn run_service_thunder(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!(
+            "Thunder execution requested for service: {}",
+            service_name
+        )),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -155,7 +228,8 @@ async fn run_service_thunder(
 
     let runner_state = match state.runner_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -163,15 +237,26 @@ async fn run_service_thunder(
         }
     };
 
-    // Schedule a run for the service.
-
     if let Some(runner_state) = runner_state.get(&service_name) {
-        // Check if the service is already running.
         match runner_state.channel_trigger.send(()) {
             Ok(_) => {
+                add_breadcrumb(Breadcrumb {
+                    message: Some(format!(
+                        "Thunder execution triggered for service: {}",
+                        service_name
+                    )),
+                    level: sentry::Level::Info,
+                    ..Default::default()
+                });
                 return (StatusCode::OK, "Service is running".to_string());
             }
-            Err(_) => {
+            Err(err) => {
+                sentry::capture_error(&err);
+                add_breadcrumb(Breadcrumb {
+                    message: Some(format!("Failed to trigger service: {}", service_name)),
+                    level: sentry::Level::Error,
+                    ..Default::default()
+                });
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Error sending trigger to service".to_string(),
@@ -179,6 +264,11 @@ async fn run_service_thunder(
             }
         }
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("Service not found: {}", service_name)),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     }
 }
@@ -187,9 +277,19 @@ async fn run_lib_service_thunder(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!(
+            "Thunder execution requested for lib service: {}",
+            service_name
+        )),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -199,7 +299,8 @@ async fn run_lib_service_thunder(
 
     let native_runner_states = match state.native_runner_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -207,15 +308,26 @@ async fn run_lib_service_thunder(
         }
     };
 
-    // Schedule a run for the service.
-
     if let Some(native_runner_state) = native_runner_states.get(&service_name) {
-        // Check if the service is already running.
         match native_runner_state.channel_trigger.send(()) {
             Ok(_) => {
+                add_breadcrumb(Breadcrumb {
+                    message: Some(format!(
+                        "Thunder execution triggered for lib service: {}",
+                        service_name
+                    )),
+                    level: sentry::Level::Info,
+                    ..Default::default()
+                });
                 return (StatusCode::OK, "Service is running".to_string());
             }
-            Err(_) => {
+            Err(err) => {
+                sentry::capture_error(&err);
+                add_breadcrumb(Breadcrumb {
+                    message: Some(format!("Failed to trigger lib service: {}", service_name)),
+                    level: sentry::Level::Error,
+                    ..Default::default()
+                });
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Error sending trigger to service".to_string(),
@@ -223,6 +335,11 @@ async fn run_lib_service_thunder(
             }
         }
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("Lib service not found: {}", service_name)),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     }
 }
@@ -231,9 +348,16 @@ async fn get_service_stats(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!("Stats requested for service: {}", service_name)),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -243,7 +367,8 @@ async fn get_service_stats(
 
     let runner_state = match state.runner_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -260,6 +385,11 @@ async fn get_service_stats(
             ),
         );
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("Service not found: {}", service_name)),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     }
 }
@@ -268,9 +398,16 @@ async fn get_lib_service_stats(
     Path(service_name): Path<String>,
     State(state): State<Arc<Mutex<AppState>>>,
 ) -> (StatusCode, String) {
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!("Stats requested for lib service: {}", service_name)),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
+
     let state = match state.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -280,7 +417,8 @@ async fn get_lib_service_stats(
 
     let native_runner_states = match state.native_runner_states.lock() {
         Ok(val) => val,
-        Err(_) => {
+        Err(err) => {
+            sentry::capture_error(&err);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Error getting lock".to_string(),
@@ -300,6 +438,11 @@ async fn get_lib_service_stats(
             ),
         );
     } else {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("Lib service not found: {}", service_name)),
+            level: sentry::Level::Warning,
+            ..Default::default()
+        });
         return (StatusCode::NOT_FOUND, "Service not found".to_string());
     }
 }

@@ -6,7 +6,7 @@
   env.MODULES_PATH = "./modules";
   env.SHOW_MODULES_CONSOLE = "true";
   env.SCCACHE_REDIS_ENDPOINT = "rediss://100.115.180.74:6379";
-  env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+  #env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
   env.SCCACHE_LOG="debug";
   env.SCCACHE_NO_DAEMON="1";
 

@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use sentry::{add_breadcrumb, Breadcrumb, Level};
 use sqlite::Connection;
 use wasmer::{Module, Store};
 use wasmer_wasix::{Pipe, WasiEnv};
@@ -76,6 +77,15 @@ fn process_wasm_execution(
     store: &mut Store,
     module: &Box<Module>,
 ) {
+    add_breadcrumb(Breadcrumb {
+        message: Some(format!(
+            "Starting WASM execution for: {}",
+            runner.module_name
+        )),
+        level: Level::Info,
+        ..Default::default()
+    });
+
     let (stdout_tx, mut stdout_rx) = Pipe::channel();
     let (stderr_tx, mut stderr_rx) = Pipe::channel();
 
@@ -84,7 +94,13 @@ fn process_wasm_execution(
         .stderr(Box::new(stderr_tx))
         .run_with_store(*module.clone(), store);
 
-    if builder.is_err() {
+    if let Err(err) = builder {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("WASM execution failed for: {}", runner.module_name)),
+            level: Level::Error,
+            ..Default::default()
+        });
+        sentry::capture_error(&err);
         if let Ok(mut states) = runner_states.lock() {
             if let Some(state) = states.get_mut(&runner.module_name) {
                 state.last_run_success = false;
@@ -94,15 +110,41 @@ fn process_wasm_execution(
     }
 
     let mut stdout = String::new();
-    stdout_rx.read_to_string(&mut stdout).unwrap();
+    if let Err(err) = stdout_rx.read_to_string(&mut stdout) {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!(
+                "Failed to read WASM stdout: {}",
+                runner.module_name
+            )),
+            level: Level::Error,
+            ..Default::default()
+        });
+        sentry::capture_error(&err);
+        return;
+    }
 
     process_output(&stdout, runner_connection);
 
     let mut stderr = String::new();
-    stderr_rx.read_to_string(&mut stderr).unwrap();
+    if let Err(err) = stderr_rx.read_to_string(&mut stderr) {
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!(
+                "Failed to read WASM stderr: {}",
+                runner.module_name
+            )),
+            level: Level::Error,
+            ..Default::default()
+        });
+        sentry::capture_error(&err);
+        return;
+    }
 
     for line in stderr.lines() {
-        println!("RUNNER {}: {}", &runner.module_name, line);
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!("WASM stderr - {}: {}", runner.module_name, line)),
+            level: Level::Warning,
+            ..Default::default()
+        });
     }
 }
 
