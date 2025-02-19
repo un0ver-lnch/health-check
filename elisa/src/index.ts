@@ -18,6 +18,7 @@ const app = new Elysia({
         onHandle(({ begin, onStop }) => {
             onStop(({ end }) => {
                 console.log("Request handled in", end - begin, "ms");
+                Sentry.captureMessage(`Request ${context.path} handled in ${end - begin}ms`);
             })
         })
     })
