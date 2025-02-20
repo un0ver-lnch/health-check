@@ -227,6 +227,7 @@ fn main() {
     threads_span.finish();
 
     sentry::capture_message("Health-Check Agent started correctly", sentry::Level::Info);
+    transaction.finish();
 
     std::thread::park();
 }
