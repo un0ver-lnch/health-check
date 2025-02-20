@@ -26,9 +26,12 @@ fn main() {
                     .into(),
             ),
             release: sentry::release_name!(),
+            sample_rate: 1.0,
             ..Default::default()
         },
     ));
+
+    if _guard.is_enabled() {};
 
     let connection = sqlite::open(":memory:").expect("Could not create in memory db");
     let connection_mutex = Arc::new(Mutex::new(connection));

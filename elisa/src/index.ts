@@ -37,27 +37,66 @@ const app = new Elysia({
     .get("/", () => "Hello Elysia")
     .put("/upload",
         async function* ({ body: { name, file } }) {
+            Sentry.addBreadcrumb({
+                category: 'upload',
+                message: `Starting upload for file: ${name}`,
+                level: 'info',
+            });
+
             const path = `${Bun.env.MODULES_DOWNLOAD}/${name}`;
             const checkingFile = Bun.file(path);
             try {
                 await checkingFile.delete();
+                Sentry.addBreadcrumb({
+                    category: 'upload',
+                    message: `Deleted existing file: ${name}`,
+                    level: 'info',
+                });
             } catch (error) {
-                console.log(error);
+                Sentry.addBreadcrumb({
+                    category: 'upload',
+                    message: `No existing file to delete: ${name}`,
+                    level: 'info',
+                });
+                Sentry.captureException(error);
             }
+
             var percentage = 0;
             var current_copied = 0;
             const fileDescriptor = Bun.file(path);
             await Bun.write(fileDescriptor, "");
             const writer = fileDescriptor.writer();
+
             for await (const chunk of file.stream()) {
                 writer.write(chunk);
                 current_copied += chunk.length;
                 percentage = Math.floor((current_copied / file.size) * 100);
-                console.log("Percentage:", percentage);
+                if (percentage % 25 === 0) { // Add breadcrumb every 25%
+                    Sentry.addBreadcrumb({
+                        category: 'upload',
+                        message: `Upload progress: ${percentage}%`,
+                        level: 'info',
+                        data: {
+                            percentage,
+                            bytes_copied: current_copied,
+                            total_size: file.size
+                        }
+                    });
+                }
                 yield { percentage };
             }
+
             writer.flush();
             writer.end();
+
+            Sentry.addBreadcrumb({
+                category: 'upload',
+                message: `Upload completed for file: ${name}`,
+                level: 'info',
+                data: {
+                    final_size: current_copied,
+                }
+            });
         },
         {
             body:
