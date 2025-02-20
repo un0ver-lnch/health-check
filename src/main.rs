@@ -11,6 +11,7 @@ use std::{
 
 use indicatif::ProgressBar;
 use persistency::Save;
+use sentry::{add_breadcrumb, Breadcrumb};
 use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
 
 #[macro_use]
@@ -31,7 +32,11 @@ fn main() {
         },
     ));
 
-    if _guard.is_enabled() {};
+    let tx_ctx = sentry::TransactionContext::new("startup", "perform-startup");
+    let transaction = sentry::start_transaction(tx_ctx);
+
+    // Validate the cart
+    let creation_span = transaction.start_child("creation", "Create all the structs");
 
     let connection = sqlite::open(":memory:").expect("Could not create in memory db");
     let connection_mutex = Arc::new(Mutex::new(connection));
@@ -76,7 +81,10 @@ fn main() {
     let mut wasm_run_containers: Vec<WasmRunner> = Vec::new();
     let mut dll_run_containers: Vec<DLLRunner> = Vec::new();
     let mut dll_containers: Vec<DLLRunner> = Vec::new();
+
+    creation_span.finish();
     bar.set_message("Reading files in MODULES_PATH folder");
+    let discovery_span = transaction.start_child("discovery", "Discover all the modules");
     for entry in modules_path_iterator {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
 
@@ -102,24 +110,53 @@ fn main() {
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
             });
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!(
+                    "Found runner module: {}",
+                    entry.file_name().to_str().unwrap()
+                )),
+                ..Default::default()
+            });
         } else if entry.file_name().to_str().unwrap().ends_with(".wasm") {
             wasm_containers.push(WasmWorker {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
             });
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!(
+                    "Found worker module: {}",
+                    entry.file_name().to_str().unwrap()
+                )),
+                ..Default::default()
+            });
         } else if entry.file_name().to_str().unwrap().ends_with("_run.so") {
             dll_run_containers.push(DLLRunner {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 path: canonicalize(entry_path).unwrap().display().to_string(),
+            });
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!(
+                    "Found runner DLL: {}",
+                    entry.file_name().to_str().unwrap()
+                )),
+                ..Default::default()
             });
         } else if entry.file_name().to_str().unwrap().ends_with(".so") {
             dll_containers.push(DLLRunner {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 path: canonicalize(entry_path).unwrap().display().to_string(),
             });
+            add_breadcrumb(Breadcrumb {
+                message: Some(format!(
+                    "Found worker DLL: {}",
+                    entry.file_name().to_str().unwrap()
+                )),
+                ..Default::default()
+            });
         }
     }
+    discovery_span.finish();
 
     if wasm_containers.is_empty()
         && wasm_run_containers.is_empty()
@@ -162,6 +199,8 @@ fn main() {
     let runner_states = Arc::new(Mutex::new(HashMap::new()));
     let native_runner_states = Arc::new(Mutex::new(HashMap::new()));
 
+    let threads_span = transaction.start_child("threads", "Creation of threads");
+
     threads::spawn_wasm_worker_threads(wasm_containers, worker_states.clone());
     threads::spawn_dll_worker_threads(dll_containers, native_worker_states.clone());
     threads::spawn_wasm_runner_threads(
@@ -184,6 +223,8 @@ fn main() {
             native_runner_states,
         );
     });
+
+    threads_span.finish();
 
     std::thread::park();
 }
