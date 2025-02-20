@@ -118,6 +118,14 @@ fn main() {
                 ..Default::default()
             });
         } else if entry.file_name().to_str().unwrap().ends_with(".wasm") {
+            let json_pair = match std::fs::read(entry_path) {
+                Ok(val) => val,
+                Err(err) => {
+                    sentry::capture_error(&err);
+                    panic!("Error: Could not read file in MODULES_PATH folder");
+                }
+            };
+
             wasm_containers.push(WasmWorker {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
