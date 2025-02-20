@@ -18,7 +18,6 @@ const app = new Elysia({
         onHandle(({ begin, onStop }) => {
             onStop(({ end }) => {
                 console.log("Request handled in", end - begin, "ms");
-                Sentry.captureMessage(`Request ${context.path} handled in ${end - begin}ms`);
             })
         })
     })
@@ -88,15 +87,7 @@ const app = new Elysia({
 
             writer.flush();
             writer.end();
-
-            Sentry.addBreadcrumb({
-                category: 'upload',
-                message: `Upload completed for file: ${name}`,
-                level: 'info',
-                data: {
-                    final_size: current_copied,
-                }
-            });
+            Sentry.captureMessage(`Upload completed for file: ${name}`);
         },
         {
             body:
