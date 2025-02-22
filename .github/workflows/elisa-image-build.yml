@@ -1,7 +1,8 @@
 name: GitHub Actions - Elisa Image Build
-run-name: Elisa docker image building
 env:
   REGISTRY: ghcr.io
+  YML_PATH: "../health-check/elisa/k8s.elisa.deployment.yml"
+  IMAGE_TAG: "${{ env.REGISTRY }}/${{ github.repository }}-elisa:${{ github.run_id }}"
 on:
   push:
     branches:
@@ -9,10 +10,6 @@ on:
     paths:
       - "elisa/**"
       - ".github/workflows/elisa-image-build.yml"
-
-env:
-  YML_PATH: "../health-check/elisa/k8s.elisa.deployment.yml"
-  IMAGE_TAG: "${{ env.REGISTRY }}/${{ github.repository }}-elisa:${{ github.run_id }}"
 
 jobs:
   Build-Agent-DockerImage-Arm:

@@ -1,7 +1,8 @@
 name: GitHub Actions - Agent Image Build
-run-name: Agent docker image building
 env:
   REGISTRY: ghcr.io
+  YML_PATH: '../health-check/k8s.health.check.deployment.yml'
+  IMAGE_TAG: "${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}"
 on:
   push:
     branches:
@@ -11,8 +12,6 @@ on:
       - "Cargo.toml"
       - "Dockerfile"
       - ".github/workflows/agent-image-build.yml"
-env:
-  YML_PATH: "'../health-check/k8s.health.check.deployment.yml'"
 
 jobs:
   Build-Agent-DockerImage-Arm:
@@ -39,7 +38,7 @@ jobs:
           context: "{{defaultContext}}"
           platforms: linux/arm64/v8
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}
+          tags: ${{ env.IMAGE_TAG }}
   Deploy-In-Cluster:
     runs-on: self-hosted
     permissions:
