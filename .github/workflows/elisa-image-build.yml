@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          name: un0ver-lnch/universe
+          repository: un0ver-lnch/universe
           ref: refs/heads/trunk
           token: ${{ secrets.PAT }}
       - uses: oven-sh/setup-bun@v2
