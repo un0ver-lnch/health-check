@@ -11,6 +11,8 @@ on:
       - "Cargo.toml"
       - "Dockerfile"
       - ".github/workflows/agent-image-build.yml"
+env:
+  YML_PATH: "'../health-check/k8s.health.check.deployment.yml'"
 
 jobs:
   Build-Agent-DockerImage-Arm:
@@ -38,3 +40,22 @@ jobs:
           platforms: linux/arm64/v8
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}
+  Deploy-In-Cluster:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          name: un0ver-lnch/universe
+          ref: refs/heads/trunk
+          token: ${{ secrets.PAT }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd bigbang && bun install
+      - name: Adjust deployment
+        run: cd bigbang && NODE_TLS_REJECT_UNAUTHORIZED=0 bun run src/heath-check-agent-deploy.ts
