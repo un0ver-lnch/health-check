@@ -1,8 +1,7 @@
 name: GitHub Actions - Agent Image Build
 env:
-  REGISTRY: ghcr.io
-  YML_PATH: '../health-check/k8s.health.check.deployment.yml'
-  IMAGE_TAG: "${{ env.REGISTRY }}/${{ github.repository }}-agent:${{ github.run_id }}"
+  YML_PATH: ../health-check/k8s.health.check.deployment.yml
+  IMAGE_TAG: ghcr.io/${{ github.repository }}-agent:${{ github.run_id }}
 on:
   push:
     branches:
