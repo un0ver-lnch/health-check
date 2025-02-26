@@ -1,9 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 pub struct WasmWorker {
     pub module_name: String,
     pub bytes: Vec<u8>,
     pub stats: GenericPayload,
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct GenericPayload {
     pub module_name: String,
     pub delay: Option<u64>,
