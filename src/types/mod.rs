@@ -12,11 +12,13 @@ pub struct GenericPayload {
 pub struct WasmRunner {
     pub module_name: String,
     pub bytes: Vec<u8>,
+    pub stats: GenericPayload,
 }
 
 pub struct DLLRunner {
     pub module_name: String,
     pub path: String,
+    pub stats: GenericPayload,
 }
 
 pub struct WorkerStates {

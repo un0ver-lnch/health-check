@@ -10,9 +10,8 @@ use std::{
 };
 
 use indicatif::ProgressBar;
-use persistency::Save;
 use sentry::{add_breadcrumb, Breadcrumb};
-use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
+use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates, GenericPayload};
 
 #[macro_use]
 extern crate defer;
@@ -89,12 +88,23 @@ fn main() {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
 
         let entry_path = entry.path();
+        let sidecar_json_path = entry_path.clone();
+        sidecar_json_path.set_file_name(format!(
+            "{}.{}",
+            entry.file_name().to_str().unwrap(),
+            "json"
+        ));
+
+        let sidecar_json_contents = std::fs::read(sidecar_json_path).expect("Could not read the sidecar");
+
+        let sidecar: GenericPayload = serde_json::from_str(sidecar_json_contents).expect("Could not parse the sidecar.");
+
 
         if entry_path.is_dir() == true
             && entry_path.file_name().unwrap().to_str().unwrap() == "lost+found"
         {
             continue;
-        }
+        };
 
         if entry_path.is_dir() {
             panic!("Error: MODULES_PATH folder contains a directory");
@@ -118,14 +128,6 @@ fn main() {
                 ..Default::default()
             });
         } else if entry.file_name().to_str().unwrap().ends_with(".wasm") {
-            let json_pair = match std::fs::read(entry_path) {
-                Ok(val) => val,
-                Err(err) => {
-                    sentry::capture_error(&err);
-                    panic!("Error: Could not read file in MODULES_PATH folder");
-                }
-            };
-
             wasm_containers.push(WasmWorker {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
