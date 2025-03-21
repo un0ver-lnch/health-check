@@ -64,23 +64,22 @@ jobs:
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=libbitsearch-health.json'
   Restart-Pods:
-    if: false
-    needs: Deploy-Artifacts-Elisa
+    needs: [Deploy-Artifacts-Elisa, Deploy-Artifacts-Sidecar-Elisa]
     runs-on: self-hosted
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
-      - uses: azure/setup-kubectl@v4
-        id: install
-      - name: Config kubectl
-        run: |
-          echo "$KUBECONFIG_CI" > kubeconfig
-          export KUBECONFIG=$(pwd)/kubeconfig
-          kubectl get pods
-        env:
-          KUBECONFIG_CI: ${{ secrets.KUBECONFIG_CI }}
-      - name: Restart pods
-        run: |
-          kubectl rollout restart deployment health-check-agent -n health-check
+      - uses: actions/checkout@v4
+        with:
+          repository: un0ver-lnch/universe
+          ref: refs/heads/trunk
+          token: ${{ secrets.PAT }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd bigbang && bun install
+      - name: Adjust deployment
+        run: cd bigbang && NODE_TLS_REJECT_UNAUTHORIZED=0 FILER=health-check-agent NAMESPACE=health-check bun run src/rollout-deployment.ts
