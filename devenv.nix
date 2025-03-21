@@ -5,8 +5,8 @@
   dotenv.enable = true;
   env.MODULES_PATH = "./modules";
   env.SHOW_MODULES_CONSOLE = "true";
-  env.SCCACHE_REDIS_ENDPOINT = "rediss://100.115.180.74:6379";
-  #env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+  env.SCCACHE_REDIS_ENDPOINT = "redis://0.0.0.0:6379";
+  # env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
   env.SCCACHE_LOG="debug";
   env.SCCACHE_NO_DAEMON="1";
 
@@ -19,12 +19,16 @@
 
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";
+  processes = {
+    sccache_port_forwarding.exec = "cd $HOME/hetzner-kubernetes-cluster-terraform && devenv shell bash -- kubectl port-forward deployments/redis 6379:6379 -n sccache";
+  };
 
   # https://devenv.sh/services/
   # services.postgres.enable = true;
 
   # https://devenv.sh/scripts/
   enterShell = ''
+  
   '';
 
   # https://devenv.sh/tasks/

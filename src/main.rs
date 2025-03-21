@@ -10,9 +10,8 @@ use std::{
 };
 
 use indicatif::ProgressBar;
-use persistency::Save;
 use sentry::{add_breadcrumb, Breadcrumb};
-use types::{DLLRunner, RunnerState, WasmRunner, WasmWorker, WorkerStates};
+use types::{DLLRunner, GenericPayload, RunnerState, WasmRunner, WasmWorker, WorkerStates};
 
 #[macro_use]
 extern crate defer;
@@ -89,12 +88,27 @@ fn main() {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
 
         let entry_path = entry.path();
+        let mut sidecar_json_path = entry_path.clone();
+        sidecar_json_path.set_file_name(format!(
+            "{}.{}",
+            entry.file_name().to_str().unwrap(),
+            "json"
+        ));
+
+        let sidecar_json_contents =
+            std::fs::read(sidecar_json_path).expect("Could not read the sidecar");
+
+        let sidecar: GenericPayload = serde_json::from_str(
+            &String::from_utf8(sidecar_json_contents)
+                .expect("Could not parse the string from the parts"),
+        )
+        .expect("Could not parse the sidecar.");
 
         if entry_path.is_dir() == true
             && entry_path.file_name().unwrap().to_str().unwrap() == "lost+found"
         {
             continue;
-        }
+        };
 
         if entry_path.is_dir() {
             panic!("Error: MODULES_PATH folder contains a directory");
@@ -109,6 +123,7 @@ fn main() {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
+                stats: sidecar,
             });
             add_breadcrumb(Breadcrumb {
                 message: Some(format!(
@@ -122,6 +137,7 @@ fn main() {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 bytes: std::fs::read(entry_path)
                     .expect("Error: Could not read file in MODULES_PATH folder"),
+                stats: sidecar,
             });
             add_breadcrumb(Breadcrumb {
                 message: Some(format!(
@@ -134,6 +150,7 @@ fn main() {
             dll_run_containers.push(DLLRunner {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 path: canonicalize(entry_path).unwrap().display().to_string(),
+                stats: sidecar,
             });
             add_breadcrumb(Breadcrumb {
                 message: Some(format!(
@@ -146,6 +163,7 @@ fn main() {
             dll_containers.push(DLLRunner {
                 module_name: entry.file_name().to_str().unwrap().to_string(),
                 path: canonicalize(entry_path).unwrap().display().to_string(),
+                stats: sidecar,
             });
             add_breadcrumb(Breadcrumb {
                 message: Some(format!(

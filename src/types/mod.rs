@@ -1,20 +1,29 @@
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
 pub struct WasmWorker {
     pub module_name: String,
     pub bytes: Vec<u8>,
+    pub stats: GenericPayload,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct GenericPayload {
+    pub module_name: String,
+    pub delay: Option<u64>,
 }
 
 pub struct WasmRunner {
     pub module_name: String,
     pub bytes: Vec<u8>,
+    pub stats: GenericPayload,
 }
 
 pub struct DLLRunner {
     pub module_name: String,
     pub path: String,
+    pub stats: GenericPayload,
 }
 
-#[derive(Debug)]
 pub struct WorkerStates {
     pub on_crash: bool,
     pub alive: bool,

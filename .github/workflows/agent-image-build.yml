@@ -40,7 +40,6 @@ jobs:
           tags: ${{ env.IMAGE_TAG }}
   Deploy-In-Cluster:
     runs-on: self-hosted
-    needs: Build-Agent-DockerImage-Arm
     permissions:
       contents: read
       packages: write
@@ -48,7 +47,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: un0ver-lnch/universe
+          name: un0ver-lnch/universe
+          ref: refs/heads/trunk
           token: ${{ secrets.PAT }}
       - uses: oven-sh/setup-bun@v2
         with:
