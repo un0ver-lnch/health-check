@@ -11,7 +11,7 @@ on:
       - ".github/workflows/elisa-image-build.yml"
 
 jobs:
-  Build-Agent-DockerImage-Arm:
+  Build-Elisa-DockerImage-Arm:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -22,7 +22,7 @@ jobs:
       - name: Log in to the Container registry
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
@@ -36,22 +36,23 @@ jobs:
           platforms: linux/arm64/v8
           push: true
           tags: ${{ env.IMAGE_TAG }}
-    Deploy-In-Cluster:
-      runs-on: self-hosted
-      permissions:
-        contents: read
-        packages: write
-        id-token: write
-      steps:
-        - uses: actions/checkout@v4
-          with:
-            name: un0ver-lnch/universe
-            ref: refs/heads/trunk
-            token: ${{ secrets.PAT }}
-        - uses: oven-sh/setup-bun@v2
-          with:
-            bun-version: latest
-        - name: Install dependencies
-          run: cd bigbang && bun install
-        - name: Adjust deployment
-          run: cd bigbang && NODE_TLS_REJECT_UNAUTHORIZED=0 bun run src/heath-check-agent-deploy.ts
+  Deploy-In-Cluster:
+    runs-on: self-hosted
+    needs: Build-Elisa-DockerImage-Arm
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: un0ver-lnch/universe
+          ref: refs/heads/trunk
+          token: ${{ secrets.PAT }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd bigbang && bun install
+      - name: Adjust deployment
+        run: cd bigbang && NODE_TLS_REJECT_UNAUTHORIZED=0 bun run src/heath-check-agent-deploy.ts
