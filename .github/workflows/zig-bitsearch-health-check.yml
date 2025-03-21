@@ -28,6 +28,11 @@ jobs:
         with:
           name: zig-bitsearch-health
           path: bitsearch-health/zig-out/aarch64-linux-gnu/libbitsearch-health.so
+      - name: Publish zig sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-bitsearch-health-sidecar
+          path: bitsearch-health/sidecar.json
   Deploy-Artifacts-Elisa:
     needs: Build-SO-Module
     runs-on: self-hosted
@@ -40,10 +45,18 @@ jobs:
         with:
           name: zig-bitsearch-health
           path: download/
+      - uses: actions/download-artifact@v4
+        with:
+          name: zig-bitsearch-health-sidecar
+          path: download/
       - name: Upload artifact to Elisia
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
+      - name: Upload artifact to Elisia
+        run: |
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=sidecar.json
   Restart-Pods:
+    if: false
     needs: Deploy-Artifacts-Elisa
     runs-on: self-hosted
     permissions:
@@ -63,4 +76,3 @@ jobs:
       - name: Restart pods
         run: |
           kubectl rollout restart deployment health-check-agent -n health-check
-      
