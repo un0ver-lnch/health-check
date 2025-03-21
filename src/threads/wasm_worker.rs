@@ -131,6 +131,8 @@ fn run_wasm_worker(entry: WasmWorker, worker_states: Arc<Mutex<HashMap<String, W
             },
         );
 
-        std::thread::sleep(std::time::Duration::from_secs(60));
+        std::thread::sleep(std::time::Duration::from_secs(
+            entry.stats.delay.unwrap_or(60),
+        ));
     }
 }
