@@ -59,6 +59,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: zig-bitsearch-health-sidecar
+          path: download/
       - name: Upload sidecar to Elisia
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=libbitsearch-health.json'
