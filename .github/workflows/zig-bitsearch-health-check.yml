@@ -49,12 +49,14 @@ jobs:
         with:
           name: zig-bitsearch-health-sidecar
           path: download/
+      - run: |
+          ls -la download/
       - name: Upload artifact to Elisia
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
-      - name: Upload artifact to Elisia
+      - name: Upload sidecar to Elisia
         run: |
-          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=sidecar.json
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=libbitsearch-health.json
   Restart-Pods:
     if: false
     needs: Deploy-Artifacts-Elisa
