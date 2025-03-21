@@ -48,7 +48,6 @@ jobs:
       - name: Upload artifact to Elisia
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/libbitsearch-health.so' -F 'name=libbitsearch-health.so'
-
   Deploy-Artifacts-Sidecar-Elisa:
     needs: Build-SO-Module
     runs-on: self-hosted
@@ -62,7 +61,7 @@ jobs:
           name: zig-bitsearch-health-sidecar
       - name: Upload sidecar to Elisia
         run: |
-          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=libbitsearch-health.json
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=libbitsearch-health.json'
   Restart-Pods:
     if: false
     needs: Deploy-Artifacts-Elisa
