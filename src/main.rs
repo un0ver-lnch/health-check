@@ -89,17 +89,49 @@ fn main() {
 
         add_breadcrumb(Breadcrumb {
             message: Some(format!(
-                "Reading {} file...",
+                "Preparing to read {} file...",
                 entry.file_name().to_str().unwrap()
             )),
             ..Default::default()
         });
 
+        match entry.file_name().to_str() {
+            Some("lost+found") => continue,
+            Some(x) => {
+                if x.ends_with(".json") {
+                    add_breadcrumb(Breadcrumb {
+                        message: Some(format!(
+                            "Skipping sidecar file: {}",
+                            entry.file_name().to_str().unwrap()
+                        )),
+                        ..Default::default()
+                    });
+                    continue;
+                }
+                if x.ends_with(".so") || x.ends_with(".wasm") {
+                    add_breadcrumb(Breadcrumb {
+                        message: Some(format!(
+                            "Reading {} file...",
+                            entry.file_name().to_str().unwrap()
+                        )),
+                        ..Default::default()
+                    });
+                }
+            }
+            _ => {}
+        }
+
         let entry_path = entry.path();
         let mut sidecar_json_path = entry_path.clone();
         sidecar_json_path.set_file_name(format!(
             "{}.{}",
-            entry.file_name().to_str().unwrap(),
+            entry
+                .file_name()
+                .to_str()
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap(),
             "json"
         ));
 
