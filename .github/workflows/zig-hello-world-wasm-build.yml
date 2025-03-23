@@ -28,6 +28,11 @@ jobs:
         with:
           name: zig-hello-wasm
           path: zig-hello-wasm/main.wasm
+      - name: Publish zig sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-hello-wasm-sidecar
+          path: zig-hello-wasm/sidecar.json
   Deploy-Artifacts-Elisa:
     needs: Build-WASM-Module
     runs-on: self-hosted
@@ -40,26 +45,41 @@ jobs:
         with:
           name: zig-hello-wasm
           path: download/
-      - name: Upload artifact to Elisa 
+      - name: Upload artifact to Elisa
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/main.wasm' -F 'name=main.wasm'
-  Restart-Pods:
-    needs: Deploy-Artifacts-Elisa
-    runs-on: ubuntu-24.04-arm
+  Deploy-Artifacts-Sidecar-Elisa:
+    needs: Build-SO-Module
+    runs-on: self-hosted
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
-      - uses: azure/setup-kubectl@v4
-        id: install
-      - name: Config kubectl
+      - uses: actions/download-artifact@v4
+        with:
+          name: zig-bitsearch-health-sidecar
+          path: download/
+      - name: Upload sidecar to Elisia
         run: |
-          echo "$KUBECONFIG_CI" > kubeconfig
-          export KUBECONFIG=$(pwd)/kubeconfig
-          kubectl get pods
-        env:
-          KUBECONFIG_CI: ${{ secrets.KUBECONFIG_CI }}
-      - name: Restart pods
-        run: |
-          kubectl rollout restart deployment health-check-agent -n health-check
+          curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/sidecar.json' -F 'name=main.json'
+  Restart-Pods:
+    needs: [Deploy-Artifacts-Elisa, Deploy-Artifacts-Sidecar-Elisa]
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: un0ver-lnch/universe
+          ref: refs/heads/trunk
+          token: ${{ secrets.PAT }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: cd bigbang && bun install
+      - name: Adjust deployment
+        run: cd bigbang && NODE_TLS_REJECT_UNAUTHORIZED=0 FILER=health-check-agent NAMESPACE=health-check bun run src/rollout-deployment.ts
