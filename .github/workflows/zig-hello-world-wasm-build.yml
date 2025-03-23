@@ -58,7 +58,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: zig-bitsearch-health-sidecar
+          name: zig-hello-wasm-sidecar
           path: download/
       - name: Upload sidecar to Elisia
         run: |
