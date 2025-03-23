@@ -87,6 +87,14 @@ fn main() {
     for entry in modules_path_iterator {
         let entry = entry.expect("Error: Could not read entry in MODULES_PATH folder");
 
+        add_breadcrumb(Breadcrumb {
+            message: Some(format!(
+                "Reading {} file...",
+                entry.file_name().to_str().unwrap()
+            )),
+            ..Default::default()
+        });
+
         let entry_path = entry.path();
         let mut sidecar_json_path = entry_path.clone();
         sidecar_json_path.set_file_name(format!(
