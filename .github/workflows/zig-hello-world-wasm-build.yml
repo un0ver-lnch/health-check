@@ -49,7 +49,7 @@ jobs:
         run: |
           curl http://elisa-health-service.health-check.svc.cluster.local:3000/upload --request PUT -F 'file=@download/main.wasm' -F 'name=main.wasm'
   Deploy-Artifacts-Sidecar-Elisa:
-    needs: Build-SO-Module
+    needs: Build-WASM-Module
     runs-on: self-hosted
     permissions:
       contents: read
