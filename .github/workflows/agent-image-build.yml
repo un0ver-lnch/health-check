@@ -40,6 +40,7 @@ jobs:
           tags: ${{ env.IMAGE_TAG }}
   Deploy-In-Cluster:
     runs-on: self-hosted
+    needs: Build-Agent-DockerImage-Arm
     permissions:
       contents: read
       packages: write
