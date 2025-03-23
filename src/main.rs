@@ -96,7 +96,13 @@ fn main() {
         });
 
         match entry.file_name().to_str() {
-            Some("lost+found") => continue,
+            Some("lost+found") => {
+                add_breadcrumb(Breadcrumb {
+                    message: Some("Skipping lost+found directory".to_owned()),
+                    ..Default::default()
+                });
+                continue;
+            }
             Some(x) => {
                 if x.ends_with(".json") {
                     add_breadcrumb(Breadcrumb {
