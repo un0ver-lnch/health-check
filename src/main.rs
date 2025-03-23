@@ -116,9 +116,13 @@ fn main() {
                         )),
                         ..Default::default()
                     });
+                } else {
+                    continue;
                 }
             }
-            _ => {}
+            _ => {
+                continue;
+            }
         }
 
         let entry_path = entry.path();
