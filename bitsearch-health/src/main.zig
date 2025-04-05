@@ -92,7 +92,23 @@ const ThreadedRequestProcessor = struct {
         }
 
         switch (request.response.status) {
-            .ok => array_list.append(@intFromEnum(PossibleReturnValues.ok)) catch unreachable,
+            .ok => {
+                var full_body = allocator.alloc(u8, 1_000) catch unreachable;
+                const body_buffer = allocator.alloc(u8, 1_000) catch unreachable;
+                defer allocator.free(body_buffer);
+
+                while (true) {
+                    const read_result = request.read(body_buffer) catch unreachable;
+                    if (read_result == 0) break;
+                    full_body = allocator.realloc(full_body, full_body.len + read_result) catch unreachable;
+                    @memcpy(full_body[full_body.len - read_result ..], body_buffer[0..read_result]);
+                }
+                if (std.mem.indexOf(u8, full_body, "cloudflare")) |_| {
+                    array_list.append(@intFromEnum(PossibleReturnValues.not_okey)) catch unreachable;
+                    return;
+                }
+                array_list.append(@intFromEnum(PossibleReturnValues.ok)) catch unreachable;
+            },
             .moved_permanently => array_list.append(@intFromEnum(PossibleReturnValues.ok)) catch unreachable,
             else => array_list.append(@intFromEnum(PossibleReturnValues.not_okey)) catch unreachable,
         }
@@ -158,8 +174,9 @@ fn bitseaarch(allocator: Allocator) !PossibleReturnValues {
     const about_page_uri = try comptime std.Uri.parse("https://bitsearch.to/about/");
     const library_page_uri = try comptime std.Uri.parse("https://bitsearch.to/library/");
     const library_page_two_uri = try comptime std.Uri.parse("https://bitsearch.to/library?year=2020-&page=2");
+    const search_silent_voice = try comptime std.Uri.parse("https://bitsearch.to/search?q=silent+voice");
 
-    const uri_list = [_]std.Uri{ home_page_uri, about_page_uri, library_page_uri, library_page_two_uri };
+    const uri_list = [_]std.Uri{ home_page_uri, about_page_uri, library_page_uri, library_page_two_uri, search_silent_voice };
 
     var single_threaded_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer single_threaded_arena.deinit();
