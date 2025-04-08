@@ -15,4 +15,5 @@ devenv.local.nix
 
 modules/*.wasm
 modules/*.so
+modules/*.json
 .env

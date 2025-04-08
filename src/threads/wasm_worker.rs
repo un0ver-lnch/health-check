@@ -72,12 +72,12 @@ fn run_wasm_worker(entry: WasmWorker, worker_states: Arc<Mutex<HashMap<String, W
         }
     };
 
-    let (stdout_tx, mut stdout_rx) = Pipe::channel();
-    let builder = WasiEnv::builder(&entry.module_name)
-            .stdout(Box::new(stdout_tx))
-            .run_with_store(*module, &mut store);
-
     loop {
+        let module_inside_loop = module.clone();
+        let (stdout_tx, mut stdout_rx) = Pipe::channel();
+        let builder = WasiEnv::builder(&entry.module_name)
+            .stdout(Box::new(stdout_tx))
+            .run_with_store(*module_inside_loop, &mut store);
 
         if let Err(err) = builder {
             add_breadcrumb(Breadcrumb {
