@@ -97,6 +97,15 @@ const app = new Elysia({
                 })
         }
     )
+    .post("/sentry/notify", ({ body }) => {
+        Sentry.captureMessage(body.message);
+        return "OK";
+    }, {
+        body:
+            t.Object({
+                message: t.String(),
+            })
+    })
     .listen(3000);
 
 console.log(
