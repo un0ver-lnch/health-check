@@ -9,6 +9,8 @@ Sentry.init({
 import { Elysia, t } from "elysia";
 import swagger from "@elysiajs/swagger";
 
+const ARTIFACTS_PATH = Bun.env.ARTIFACTS_PATH || "./artifacts";
+
 const app = new Elysia({
     precompile: true
 })
@@ -97,6 +99,80 @@ const app = new Elysia({
                 })
         }
     )
+    .put("/artifact/:name", async function* ({ params, body }) {
+        const { name } = params;
+        const file = body.file;
+        const artifactPath = `${ARTIFACTS_PATH}/${name}`;
+        Sentry.addBreadcrumb({
+            category: 'artifact-upload',
+            message: `Starting upload for artifact: ${name}`,
+            level: 'info',
+        });
+        try {
+            await Bun.write(artifactPath, ""); // Overwrite if exists
+            const writer = Bun.file(artifactPath).writer();
+            let current_copied = 0;
+            let percentage = 0;
+            for await (const chunk of file.stream()) {
+                writer.write(chunk);
+                current_copied += chunk.length;
+                percentage = Math.floor((current_copied / file.size) * 100);
+                if (percentage % 25 === 0) {
+                    Sentry.addBreadcrumb({
+                        category: 'artifact-upload',
+                        message: `Upload progress: ${percentage}%`,
+                        level: 'info',
+                        data: { percentage, bytes_copied: current_copied, total_size: file.size }
+                    });
+                }
+                yield { percentage };
+            }
+            writer.flush();
+            writer.end();
+            Sentry.captureMessage(`Artifact upload completed: ${name}`);
+        } catch (error) {
+            Sentry.captureException(error);
+            throw error;
+        }
+    }, {
+        params: t.Object({ name: t.String() }),
+        body: t.Object({ file: t.File() })
+    })
+    .get("/artifact/:name", async ({ params, set }) => {
+        const { name } = params;
+        const artifactPath = `${ARTIFACTS_PATH}/${name}`;
+        Sentry.addBreadcrumb({
+            category: 'artifact-download',
+            message: `Download requested for artifact: ${name}`,
+            level: 'info',
+        });
+        try {
+            const file = Bun.file(artifactPath);
+            if (!(await file.exists())) {
+                Sentry.addBreadcrumb({
+                    category: 'artifact-download',
+                    message: `Artifact not found: ${name}`,
+                    level: 'error',
+                });
+                set.status = 404;
+                return { error: "Artifact not found" };
+            }
+            set.headers["Content-Disposition"] = `attachment; filename=\"${name}\"`;
+            set.headers["Content-Type"] = "application/octet-stream";
+            Sentry.addBreadcrumb({
+                category: 'artifact-download',
+                message: `Artifact found and sent: ${name}`,
+                level: 'info',
+            });
+            return file.stream();
+        } catch (error) {
+            Sentry.captureException(error);
+            set.status = 500;
+            return { error: "Internal server error" };
+        }
+    }, {
+        params: t.Object({ name: t.String() })
+    })
     .post("/sentry/notify", ({ body }) => {
         Sentry.captureMessage(body.message);
         return "OK";
