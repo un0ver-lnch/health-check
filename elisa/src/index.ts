@@ -100,40 +100,54 @@ const app = new Elysia({
         }
     )
     .put("/artifact/:name", async function* ({ params, body }) {
-        const { name } = params;
-        const file = body.file;
-        const artifactPath = `${ARTIFACTS_PATH}/${name}`;
         Sentry.addBreadcrumb({
-            category: 'artifact-upload',
-            message: `Starting upload for artifact: ${name}`,
+            category: 'upload',
+            message: `Starting upload for artifact: ${params.name}`,
             level: 'info',
         });
+        const path = `${ARTIFACTS_PATH}/${params.name}`;
+        const checkingFile = Bun.file(path);
         try {
-            await Bun.write(artifactPath, ""); // Overwrite if exists
-            const writer = Bun.file(artifactPath).writer();
-            let current_copied = 0;
-            let percentage = 0;
-            for await (const chunk of file.stream()) {
-                writer.write(chunk);
-                current_copied += chunk.length;
-                percentage = Math.floor((current_copied / file.size) * 100);
-                if (percentage % 25 === 0) {
-                    Sentry.addBreadcrumb({
-                        category: 'artifact-upload',
-                        message: `Upload progress: ${percentage}%`,
-                        level: 'info',
-                        data: { percentage, bytes_copied: current_copied, total_size: file.size }
-                    });
-                }
-                yield { percentage };
-            }
-            writer.flush();
-            writer.end();
-            Sentry.captureMessage(`Artifact upload completed: ${name}`);
+            await checkingFile.delete();
+            Sentry.addBreadcrumb({
+                category: 'upload',
+                message: `Deleted existing artifact: ${params.name}`,
+                level: 'info',
+            });
         } catch (error) {
+            Sentry.addBreadcrumb({
+                category: 'upload',
+                message: `No existing artifact to delete: ${params.name}`,
+                level: 'info',
+            });
             Sentry.captureException(error);
-            throw error;
         }
+        var percentage = 0;
+        var current_copied = 0;
+        const fileDescriptor = Bun.file(path);
+        await Bun.write(fileDescriptor, "");
+        const writer = fileDescriptor.writer();
+
+        for await (const chunk of body.file.stream()) {
+            writer.write(chunk);
+            current_copied += chunk.length;
+            percentage = Math.floor((current_copied / body.file.size) * 100);
+            Sentry.addBreadcrumb({
+                category: 'upload',
+                message: `Upload progress: ${percentage}%`,
+                level: 'info',
+                data: {
+                    percentage,
+                    bytes_copied: current_copied,
+                    total_size: body.file.size
+                }
+            });
+            yield { percentage };
+        }
+
+        writer.flush();
+        writer.end();
+        Sentry.captureMessage(`Upload completed for artifact: ${params.name}`);
     }, {
         params: t.Object({ name: t.String() }),
         body: t.Object({ file: t.File() })
