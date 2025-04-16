@@ -100,6 +100,7 @@ const app = new Elysia({
         }
     )
     .put("/artifact/:name", async function* ({ params, body }) {
+        console.log("Uploading artifact", params.name);
         Sentry.addBreadcrumb({
             category: 'upload',
             message: `Starting upload for artifact: ${params.name}`,
@@ -122,11 +123,14 @@ const app = new Elysia({
             });
             Sentry.captureException(error);
         }
+        console.log("Deleting existing artifact", params.name);
         var percentage = 0;
         var current_copied = 0;
         const fileDescriptor = Bun.file(path);
         await Bun.write(fileDescriptor, "");
         const writer = fileDescriptor.writer();
+        console.log("Writing to", path);
+        console.log("Writer generated")
 
         for await (const chunk of body.file.stream()) {
             writer.write(chunk);
